@@ -203,18 +203,6 @@ Overwatch is just getting started! Here's a glimpse of what's on the horizon:
 
 ---
 
-## 🤝 Contributing
-
-*(Consider adding a section on how others can contribute if this becomes an open project: e.g., reporting bugs, suggesting features, submitting pull requests, coding standards, etc.)*
-
----
-
-## 📜 License
-
-*(Specify your project's license here. If you haven't chosen one, consider options like MIT, Apache 2.0, or GPL. Example: "This project is licensed under the MIT License - see the LICENSE.md file for details.")*
-
----
-
 <p align="center">
   ✨ Thank you for exploring Overwatch Command Center! ✨
 </p>
