@@ -1,0 +1,27 @@
+[theme]
+# Primary accent color for interactive elements.
+primaryColor="#00F2EA"  # Bright Teal/Cyan
+
+# Background color for the main content area.
+backgroundColor="#0A001A" # Very Dark Purple/Indigo
+
+# Background color for sidebar and most interactive widgets.
+secondaryBackgroundColor="#1C002E" # Dark Purple
+
+# Text color for the main content area.
+textColor="#F0F0F0" # Light Gray / Off-White
+
+# Font family for all text in the app.
+# Options: "serif", "sans serif", "monospace"
+# "monospace" can give a more retro-tech/terminal feel if you like.
+font="sans serif"
+
+[logger]
+# Level of logging: "error", "warning", "info", or "debug".
+# "info" is a good default.
+level = "info"
+
+[runner]
+# Allows Streamlit to periodically check for changes to the source files
+# and automatically rerun the app if changes are detected.
+serverWatchdog = true
