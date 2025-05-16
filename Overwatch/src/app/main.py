@@ -190,32 +190,39 @@ import os
 import sys
 from datetime import datetime # For the placeholder time
 
-# --- Path Setup (Ensure this is correct for your project structure) ---
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_ROOT_DIR = os.path.dirname(APP_DIR)
-PROJECT_ROOT_DIR = os.path.dirname(SRC_ROOT_DIR)
+# --- Path Setup (CRITICAL: Ensure this is correct for your project structure) ---
+# This setup assumes main.py is in a directory like 'src/app/'
+# and 'src/' is the parent directory containing 'plugins', 'core', etc.
+APP_DIR = os.path.dirname(os.path.abspath(__file__)) # Should be /path/to/project/src/app
+SRC_ROOT_DIR = os.path.dirname(APP_DIR) # Should be /path/to/project/src
+# PROJECT_ROOT_DIR = os.path.dirname(SRC_ROOT_DIR) # Should be /path/to/project (Uncomment if needed)
 
-if PROJECT_ROOT_DIR not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT_DIR)
-if SRC_ROOT_DIR not in sys.path: # Important for 'from src.plugins...'
+# Add SRC_ROOT_DIR to sys.path to allow imports like 'from src.plugins...'
+# This is crucial for Streamlit when it runs individual page scripts from the 'pages/' directory.
+if SRC_ROOT_DIR not in sys.path:
      sys.path.insert(0, SRC_ROOT_DIR)
+     # st.sidebar.info(f"Main.py: Added {SRC_ROOT_DIR} to sys.path") # For debugging path issues
 
 # --- Import Application Modules ---
+# Attempt to import essential modules. Errors here will stop the app.
 try:
     from src.plugins.manager import PluginManager, AppContext
     from src.plugins.interface import OverwatchPlugin # For type hinting
 except ImportError as e:
-    st.error(f"Fatal Error: Failed to import core modules. Please check your PYTHONPATH and project structure. Error: {e}")
-    st.error(f"PROJECT_ROOT_DIR: {PROJECT_ROOT_DIR}, SRC_ROOT_DIR: {SRC_ROOT_DIR}")
-    st.error(f"sys.path: {sys.path}")
-    st.stop()
+    st.error(f"Fatal Error: Failed to import core modules (PluginManager, OverwatchPlugin, AppContext).")
+    st.error(f"This usually indicates a problem with your Python environment or PYTHONPATH setup.")
+    st.error(f"Details: {e}")
+    st.error(f"Current sys.path: {sys.path}")
+    st.error(f"Expected SRC_ROOT_DIR ('{SRC_ROOT_DIR}') to be in sys.path for imports like 'from src.plugins...'.")
+    st.stop() # Stop execution if essential modules can't be loaded.
 
 # --- Application Configuration (Called only ONCE) ---
+# This should be the first Streamlit command in your main script.
 st.set_page_config(
     page_title="Overwatch Command Center",
-    page_icon="🌠",
+    page_icon="🌠",  # "Catchy" emoji for the browser tab
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded", # Ensures sidebar is open by default
     menu_items={
         'Get Help': 'https://www.example.com/help', # Replace with your actual help URL
         'Report a bug': "https://www.example.com/bug", # Replace with your actual bug report URL
@@ -225,41 +232,63 @@ st.set_page_config(
 
 # --- Initialize Shared Session State (Centralized) ---
 def initialize_global_session_state():
-    """Initializes global session state variables if they don't exist."""
+    """
+    Initializes global session state variables if they don't exist.
+    This function is called once when main.py runs.
+    Individual pages in the 'pages/' directory will inherit this session state.
+    """
+    # For database connections
     if "active_connections" not in st.session_state:
         st.session_state.active_connections = {}
     if "last_query_result" not in st.session_state:
         st.session_state.last_query_result = None
+
+    # For data passed to EDA/ML pages
     if "current_eda_df" not in st.session_state:
         st.session_state.current_eda_df = None
-    if "active_plugin_for_viewer" not in st.session_state:
-        st.session_state.active_plugin_for_viewer = None
 
+    # For plugin management
+    if "active_plugin_for_viewer" not in st.session_state:
+        st.session_state.active_plugin_for_viewer = None # Stores the name of the plugin to be viewed
+
+    # Initialize Plugin Manager
     if "plugin_manager" not in st.session_state:
         try:
+            # Create the application context that plugins might use
             app_context: AppContext = {"session_state": st.session_state}
             st.session_state.plugin_manager = PluginManager(app_context=app_context)
-            st.session_state.plugin_manager.load_plugins()
+            st.session_state.plugin_manager.load_plugins() # Discover and load all plugins
+            # st.toast("Plugin system initialized and plugins loaded!", icon="🔌") # Optional feedback
         except Exception as e:
-            st.error(f"Error initializing plugin manager: {e}")
-            st.session_state.plugin_manager = None
+            st.error(f"Critical Error: Could not initialize or load plugins via PluginManager: {e}")
+            st.exception(e) # Show full traceback for debugging
+            st.session_state.plugin_manager = None # Ensure it's None if initialization failed
     
-    if 'current_time_placeholder' not in st.session_state: # Example state
-        st.session_state.current_time_placeholder = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Placeholder for any other global state, like a timestamp
+    if 'app_init_time' not in st.session_state: # Renamed for clarity
+        st.session_state.app_init_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # --- Define Common Sidebar Elements ---
 def build_common_sidebar():
-    """Builds common sidebar elements like title, plugin controls, and footer."""
-    THEME_PRIMARY_COLOR_FOR_TITLE = st.get_option("theme.primaryColor") or "#00F2EA" 
+    """
+    Builds common sidebar elements like the application title, plugin controls, and footer.
+    This function is called by main.py and these elements will appear on every page.
+    """
+    # Thematic Sidebar Title
+    THEME_PRIMARY_COLOR_FOR_TITLE = st.get_option("theme.primaryColor") or "#00F2EA" # Fallback color
     st.sidebar.markdown(
         f"<h1 style='text-align: center; color: {THEME_PRIMARY_COLOR_FOR_TITLE};'>🛰️ Overwatch</h1>",
         unsafe_allow_html=True
     )
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("---") # Visual separator
 
-    # Streamlit automatically adds links to pages from the 'pages/' directory here.
+    # Streamlit automatically adds links to pages from the 'pages/' directory here in the sidebar.
+    # The order and names are determined by the filenames (e.g., '0_🏠_Home.py').
 
-    st.sidebar.markdown("## Plugin Controls")
+    # --- Plugin Sidebar Contributions ---
+    st.sidebar.markdown("## Plugin Controls") # Section title for plugin buttons
+
+    # Check if plugin_manager was successfully initialized and is available
     if "plugin_manager" in st.session_state and st.session_state.plugin_manager is not None:
         plugin_manager: PluginManager = st.session_state.plugin_manager
         loaded_plugins: list[OverwatchPlugin] = plugin_manager.get_all_plugins()
@@ -267,50 +296,67 @@ def build_common_sidebar():
 
         if loaded_plugins:
             for plugin in loaded_plugins:
+                # Check if the plugin has the method to render sidebar contributions
                 if hasattr(plugin, 'render_sidebar_contribution'):
                     try:
-                        # Ensure plugin has access to app_context for session_state modifications
-                        # This assumes plugins might need to access self._app_context
-                        # It's better if plugins are initialized with this context.
+                        # Ensure plugin has access to app_context if it needs to set session_state.
                         if not hasattr(plugin, '_app_context') or plugin._app_context is None:
-                             if hasattr(plugin_manager, 'app_context'):
-                                 plugin._app_context = plugin_manager.app_context # Make context available
+                             if hasattr(plugin_manager, 'app_context'): # Check if plugin_manager has app_context
+                                 plugin._app_context = plugin_manager.app_context
 
-                        plugin.render_sidebar_contribution()
+                        plugin.render_sidebar_contribution() # Call the plugin's method
                         plugins_with_sidebar_contributions = True
                     except Exception as e:
-                        st.sidebar.error(f"Error in '{plugin.metadata.name}' sidebar: {e}", icon="⚠️")
+                        st.sidebar.error(f"Error in '{plugin.metadata.name}' sidebar contribution: {e}", icon="⚠️")
+                        # st.sidebar.exception(e) # Uncomment for more detailed error in sidebar
         
         if not loaded_plugins:
             st.sidebar.info("No plugins loaded.")
         elif not plugins_with_sidebar_contributions:
-            st.sidebar.info("No plugin-specific controls available.")
+            st.sidebar.info("No plugin-specific controls available in the sidebar.")
     else:
-        st.sidebar.warning("Plugin manager not available.", icon="⚙️")
+        st.sidebar.warning("Plugin manager is not available. Plugin controls cannot be displayed.", icon="⚙️")
 
-    st.sidebar.markdown("---")
+    # --- Footer Info (Appears on all pages in the sidebar) ---
+    st.sidebar.markdown("---") # Visual separator
     st.sidebar.info(
         f"Overwatch Command Center v0.1.0\n"
         f"© {datetime.now().year} - Modular & Extensible ✨"
     )
-    st.sidebar.caption(f"Timestamp: {st.session_state.get('current_time_placeholder', 'N/A')}")
+    # Displaying the placeholder time from session state (ensure it's initialized)
+    st.sidebar.caption(f"Initialized: {st.session_state.get('app_init_time', 'Not available')}")
 
 # --- Main Execution Block ---
 if __name__ == "__main__":
+    # Initialize global session state variables. This is crucial and should run first.
     initialize_global_session_state()
+    
+    # Build the common sidebar elements. These will appear on every page.
     build_common_sidebar()
 
-    # Content for main.py itself (if accessed directly, though Streamlit usually shows a page from `pages/`)
+    # Content for main.py itself (if accessed directly):
+    # In a multipage app using the `pages/` directory, Streamlit typically defaults to
+    # showing the first page from that directory (e.g., a file named 0_Home.py).
+    # The content here in `main.py` will only be shown if a user somehow navigates
+    # directly to `main.py` without a page from the `pages/` directory being selected,
+    # or if there are no files in the `pages/` directory.
+    
+    # This provides a fallback message if no page from 'pages/' is rendered.
     st.markdown(
         """
         ### 🚀 Overwatch Command Center Initialized!
 
-        Select a module from the navigation panel on the left.
+        Please select a module from the navigation panel on the left.
         
-        If you're seeing this, the main application script has run. 
+        If you're seeing this, the main application script (`main.py`) has run. 
         Streamlit should typically display your 'Home' page or another selected page from the `pages/` directory.
+        
+        **Troubleshooting Tips:**
+        - Ensure Python files exist in a `pages/` subdirectory (e.g., `src/app/pages/`).
+        - Verify that each script in the `pages/` directory is a valid, runnable Streamlit page and calls its main display function.
+        - Check the terminal for any error messages when Streamlit starts or when navigating.
         """
     )
     # For debugging, you can show some session state info here:
-    # with st.expander("Session State Debug"):
+    # with st.expander("Session State Debug (from main.py)"):
     #    st.json(st.session_state)
