@@ -181,3 +181,185 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+# Main application logic for Overwatch Command Center
+import streamlit as st
+from streamlit_option_menu import option_menu # Import for enhanced navigation
+import os
+import sys
+
+# Determine the project root directory
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+SRC_ROOT_DIR = os.path.dirname(APP_DIR)
+PROJECT_ROOT_DIR = os.path.dirname(SRC_ROOT_DIR)
+
+if PROJECT_ROOT_DIR not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT_DIR)
+
+# Import page modules and plugin components
+from src.app.pages import home
+from src.app.pages import database_manager
+from src.app.pages import analytics
+from src.app.pages import model_integration
+from src.plugins.manager import PluginManager, AppContext
+from src.plugins.interface import OverwatchPlugin # For type hinting
+
+# --- App Configuration ---
+st.set_page_config(
+    page_title="Overwatch Command Center",
+    page_icon="🌠",  # Space/galaxy themed icon
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'About': "# Overwatch Command Center\nModular. Extensible. Powerful. 🌌"
+    }
+)
+
+# --- Initialize Session State ---
+def initialize_session_state():
+    if "active_connections" not in st.session_state:
+        st.session_state.active_connections = {}
+    if "last_query_result" not in st.session_state:
+        st.session_state.last_query_result = None
+    if "current_eda_df" not in st.session_state:
+        st.session_state.current_eda_df = None
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "Home"
+    if "plugin_manager" not in st.session_state:
+        app_context: AppContext = {"session_state": st.session_state}
+        st.session_state.plugin_manager = PluginManager(app_context=app_context)
+        st.session_state.plugin_manager.load_plugins()
+
+# --- Main Application ---
+def main():
+    initialize_session_state()
+
+    plugin_manager: PluginManager = st.session_state.plugin_manager
+    loaded_plugins: list[OverwatchPlugin] = plugin_manager.get_all_plugins()
+
+    # --- Thematic Sidebar Title ---
+    THEME_PRIMARY_COLOR_FOR_TITLE = st.get_option("theme.primaryColor") or "#00F2EA"
+    st.sidebar.markdown(
+        f"<h1 style='text-align: center; color: {THEME_PRIMARY_COLOR_FOR_TITLE};'>🛰️ Overwatch</h1>",
+        unsafe_allow_html=True
+    )
+    st.sidebar.markdown("---")
+
+    # --- Page Definitions ---
+    core_page_definitions = {
+        "Home": {"module": home, "icon": "house-door-fill"}, # Catchy & clear icons are key
+        "Database Manager": {"module": database_manager, "icon": "database-fill-gear"},
+        "Analytics & EDA": {"module": analytics, "icon": "graph-up-arrow"},
+        "Model Integration": {"module": model_integration, "icon": "cpu-fill"},
+    }
+
+    plugin_page_definitions = {}
+    for plugin in loaded_plugins:
+        if hasattr(plugin, 'render_page_content'):
+            plugin_icon = getattr(plugin.metadata, "icon", "box-fill") # Default icon
+            plugin_page_definitions[plugin.metadata.name] = {"module": plugin, "icon": plugin_icon}
+
+    page_titles = list(core_page_definitions.keys()) + list(plugin_page_definitions.keys())
+    page_icons = [details["icon"] for details in core_page_definitions.values()] + \
+                 [details["icon"] for details in plugin_page_definitions.values()]
+
+    current_page_selection = st.session_state.get("current_page", "Home")
+    try:
+        default_menu_index = page_titles.index(current_page_selection)
+    except ValueError:
+        default_menu_index = 0
+
+    # Theme colors for styling (good practice to use theme vars)
+    THEME_PRIMARY_COLOR = st.get_option("theme.primaryColor") or "#00F2EA"
+    THEME_SECONDARY_BG_COLOR = st.get_option("theme.secondaryBackgroundColor") or "#1C002E"
+    THEME_BACKGROUND_COLOR = st.get_option("theme.backgroundColor") or "#0A001A"
+    HOVER_COLOR = "#2E0045" # A slightly different shade for hover
+
+
+    with st.sidebar:
+        selected_page_name = option_menu(
+            menu_title="Navigation", # Keep it simple or use markdown above for more style
+            options=page_titles,
+            icons=page_icons, # Ensure these are descriptive and visually appealing Bootstrap icons
+            menu_icon="rocket-takeoff-fill", # Thematic and "catchy"
+            default_index=default_menu_index,
+            orientation="vertical",
+            styles={
+                "container": {
+                    "padding": "5px !important",
+                    "background-color": THEME_SECONDARY_BG_COLOR,
+                },
+                "icon": { # Icon for each navigation item
+                    "color": THEME_PRIMARY_COLOR,
+                    "font-size": "22px" # Slightly larger icons can be "catchier"
+                },
+                "nav-link": {
+                    "font-size": "16px",
+                    "text-align": "left",
+                    "margin": "3px", # Added a little margin for spacing
+                    "padding": "10px", # Added some padding
+                    "--hover-color": HOVER_COLOR,
+                    "border-radius": "5px", # Rounded corners for links
+                },
+                "nav-link-selected": {
+                    "background-color": THEME_PRIMARY_COLOR,
+                    "color": THEME_BACKGROUND_COLOR, # Text color for selected item
+                    "font-weight": "bold", # Make selected text bolder
+                    # "border-left": f"4px solid {HOVER_COLOR}" # Example: Accent border
+                },
+                # If you wanted to style the menu_icon itself (the "rocket-takeoff-fill")
+                # "menu-icon": {"color": "#FFFFFF", "font-size": "24px"} # Example
+            }
+        )
+
+    st.session_state.current_page = selected_page_name
+    page_to_render = selected_page_name
+
+    # --- Page Rendering Logic ---
+    # (No changes to this section needed for navigation enhancement)
+    with st.spinner(f"Launching {page_to_render}... 🌠"):
+        page_rendered_successfully = False
+        if page_to_render in core_page_definitions:
+            core_page_definitions[page_to_render]["module"].app()
+            page_rendered_successfully = True
+        elif page_to_render in plugin_page_definitions:
+            plugin_module_instance = plugin_page_definitions[page_to_render]["module"]
+            try:
+                plugin_module_instance.render_page_content()
+                page_rendered_successfully = True
+            except Exception as e:
+                st.error(f"Error rendering page content for plugin '{page_to_render}': {e}")
+
+        if not page_rendered_successfully:
+            st.error(f"Page '{page_to_render}' could not be rendered. Returning to Home.")
+            st.session_state.current_page = "Home"
+            home.app()
+
+
+    # --- Plugin Sidebar Contributions ---
+    # (No changes to this section needed for navigation enhancement)
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Plugin Controls")
+    plugins_with_sidebar_contributions = False
+    for plugin in loaded_plugins:
+        if hasattr(plugin, 'render_sidebar_contribution'):
+            try:
+                plugin.render_sidebar_contribution()
+                plugins_with_sidebar_contributions = True
+            except Exception as e:
+                st.sidebar.error(f"Error in plugin '{plugin.metadata.name}' sidebar: {e}")
+
+    if not loaded_plugins or not plugins_with_sidebar_contributions:
+        st.sidebar.info("No additional plugin controls.")
+
+    # --- Footer Info ---
+    st.sidebar.markdown("---")
+    st.sidebar.info(
+        "Overwatch Command Center v0.1.0\n"
+        "Modular & Extensible ✨"
+    )
+
+if __name__ == "__main__":
+    main()
