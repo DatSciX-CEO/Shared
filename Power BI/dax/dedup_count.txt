@@ -1,18 +1,14 @@
 Deduplicated Count by Primary Job Type =
 VAR
-    // Step 1: Create a virtual table of all relevant placements and assign a priority rank to each.
+    // Step 1: Create a virtual table of relevant placements with a priority rank. (No change here)
     PlacementsWithRank =
     ADDCOLUMNS (
-        FILTER (
+        CALCULATETABLE (
             'Datalake_Bullhorn_Query',
-            'Datalake_Bullhorn_Query'[Job_Type]
-                IN {
-                    "ELS Managed Services",
-                    "Advisory",
-                    "Legal Staffing",
-                    "Support Staffing",
-                    "Direct Review"
-                }
+            'Datalake_Bullhorn_Query'[Job_Type] IN {
+                "ELS Managed Services", "Advisory", "Legal Staffing",
+                "Support Staffing", "Direct Review"
+            }
         ),
         "PlacementRank",
         SWITCH (
@@ -22,39 +18,42 @@ VAR
             'Datalake_Bullhorn_Query'[Job_Type] = "Legal Staffing", 3,
             'Datalake_Bullhorn_Query'[Job_Type] = "Support Staffing", 4,
             'Datalake_Bullhorn_Query'[Job_Type] = "Direct Review", 5,
-            999 // Fallback rank
+            999
         )
     )
 VAR
-    // Step 2: Using the ranked list, create a definitive table of each unique candidate
-    // and their single, highest-priority Job Type.
+    // Step 2: For each unique candidate, find their single, highest-priority Job Type.
+    // This replaces the problematic GROUPBY with a more robust TOPN pattern.
     CandidatePrimaryJobType =
-    GROUPBY (
-        PlacementsWithRank,
-        'Datalake_Bullhorn_Query'[CandidateID],
+    ADDCOLUMNS (
+        SUMMARIZE ( PlacementsWithRank, 'Datalake_Bullhorn_Query'[CandidateID] ),
         "PrimaryJobType",
-        VAR CurrentCandidateGroup = CURRENTGROUP ()
-        VAR TopRank = MINX ( CurrentCandidateGroup, [PlacementRank] )
-        VAR Result =
-            MINX (
-                FILTER ( CurrentCandidateGroup, [PlacementRank] = TopRank ),
-                'Datalake_Bullhorn_Query'[Job_Type]
+        CALCULATE (
+            // After finding the top row, get its Job_Type value.
+            SELECTEDVALUE ( 'Datalake_Bullhorn_Query'[Job_Type] ),
+            // Use TOPN to find the single highest-priority row for the current candidate.
+            TOPN (
+                1,
+                // Consider all placements for the current candidate.
+                CALCULATETABLE ( PlacementsWithRank ),
+                // The priority is determined by the rank, ascending (1 is highest).
+                [PlacementRank], ASC,
+                // Add a tie-breaker: if ranks are the same, take the first Job Type alphabetically.
+                'Datalake_Bullhorn_Query'[Job_Type], ASC
             )
-        RETURN
-            Result
+        )
     )
 VAR
-    // Step 3: In any visual, determine which Job Types are currently being shown or filtered.
+    // Step 3: Determine which Job Types are currently selected in the filter context. (No change here)
     SelectedJobTypes =
     VALUES ( 'Datalake_Bullhorn_Query'[Job_Type] )
 VAR
-    // Step 4: Filter our definitive candidate list (from Step 2) to only include candidates
-    // whose primary job type is visible in the current context (from Step 3).
+    // Step 4: Filter our deduplicated list to match the current selection. (No change here)
     FinalCandidatesToCount =
     FILTER (
         CandidatePrimaryJobType,
         [PrimaryJobType] IN SelectedJobTypes
     )
 RETURN
-    // Step 5: Count the rows of that final, filtered list of candidates.
+    // Step 5: Count the rows of the final, filtered table. (No change here)
     COUNTROWS ( FinalCandidatesToCount )
