@@ -1,8 +1,6 @@
-
 Deduplicated Count by Primary Job Type =
 VAR
-    // Step 1: Create a virtual table of relevant placements with a priority rank.
-    // The 'Status = "Placed"' filter is removed as your data is pre-filtered.
+    // Step 1: Create a virtual table of all relevant placements and assign a priority rank to each.
     PlacementsWithRank =
     ADDCOLUMNS (
         FILTER (
@@ -28,18 +26,15 @@ VAR
         )
     )
 VAR
-    // Step 2: Use GROUPBY to efficiently create a table of each candidate
-    // and their single highest-priority Job Type based on the rank.
+    // Step 2: Using the ranked list, create a definitive table of each unique candidate
+    // and their single, highest-priority Job Type.
     CandidatePrimaryJobType =
     GROUPBY (
         PlacementsWithRank,
         'Datalake_Bullhorn_Query'[CandidateID],
         "PrimaryJobType",
         VAR CurrentCandidateGroup = CURRENTGROUP ()
-        // Find the best rank (lowest number) within this candidate's placements
         VAR TopRank = MINX ( CurrentCandidateGroup, [PlacementRank] )
-        // Get the Job Type associated with that best rank.
-        // MINX is used again to handle any potential ties in rank, returning the first Job Type alphabetically.
         VAR Result =
             MINX (
                 FILTER ( CurrentCandidateGroup, [PlacementRank] = TopRank ),
@@ -48,13 +43,18 @@ VAR
         RETURN
             Result
     )
-RETURN
-    // Step 3: Count the candidates. This expression ensures the measure works
-    // correctly when filtered by 'Job Type' in a visual.
-    CALCULATE (
-        COUNTROWS ( CandidatePrimaryJobType ),
-        TREATAS (
-            VALUES ( 'Datalake_Bullhorn_Query'[Job_Type] ),
-            [PrimaryJobType]
-        )
+VAR
+    // Step 3: In any visual, determine which Job Types are currently being shown or filtered.
+    SelectedJobTypes =
+    VALUES ( 'Datalake_Bullhorn_Query'[Job_Type] )
+VAR
+    // Step 4: Filter our definitive candidate list (from Step 2) to only include candidates
+    // whose primary job type is visible in the current context (from Step 3).
+    FinalCandidatesToCount =
+    FILTER (
+        CandidatePrimaryJobType,
+        [PrimaryJobType] IN SelectedJobTypes
     )
+RETURN
+    // Step 5: Count the rows of that final, filtered list of candidates.
+    COUNTROWS ( FinalCandidatesToCount )
