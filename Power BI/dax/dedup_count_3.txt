@@ -1,0 +1,87 @@
+
+-- This measure calculates a distinct count of candidates based on a prioritized ranking of their job placements.
+-- It is designed to work correctly in visuals that are sliced or categorized by 'Job Type'.
+-- The logic is broken down into sequential steps using variables (VAR) for clarity and debugging.
+
+VAR
+    -- VAR PlacementsWithRank: This first virtual table is the foundation for the entire measure.
+    -- Its purpose is to create a complete list of every relevant placement for every candidate
+    -- and assign a priority rank to each one based on the Job Type.
+    PlacementsWithRank =
+    CALCULATETABLE (
+        -- Step 1A: Use ADDCOLUMNS to add a new column named "PlacementRank" to the main table.
+        ADDCOLUMNS (
+            'Datalake_Bullhorn_Query',
+            "PlacementRank",
+            -- The SWITCH function assigns a number based on priority. A lower number (e.g., 1)
+            -- signifies a higher priority. SWITCH(TRUE()) is a powerful and readable way to handle multiple conditions.
+            SWITCH (
+                TRUE (),
+                'Datalake_Bullhorn_Query'[Job_Type] = "ELS Managed Services", 1,
+                'Datalake_Bullhorn_Query'[Job_Type] = "Advisory", 2,
+                'Datalake_Bullhorn_Query'[Job_Type] = "Legal Staffing", 3,
+                'Datalake_Bullhorn_Query'[Job_Type] = "Support Staffing", 4,
+                'Datalake_Bullhorn_Query'[Job_Type] = "Direct Review", 5,
+                999 -- A high fallback value for any other job types not in the priority list.
+            )
+        ),
+        -- Step 1B: Filter this newly ranked table to only include the Job Types we care about for the measure.
+        'Datalake_Bullhorn_Query'[Job_Type] IN {
+            "ELS Managed Services", "Advisory", "Legal Staffing",
+            "Support Staffing", "Direct Review"
+        },
+        -- Step 1C: This is the MOST CRITICAL part of the formula. REMOVEFILTERS tells DAX to ignore any
+        -- filters coming from the visual on the 'Job_Type' column. This ensures that when we rank a
+        -- candidate's jobs, we are looking at ALL their jobs, not just the one for the specific row
+        -- in the visual. This prevents the "all totals rolling up to one category" error.
+        REMOVEFILTERS ( 'Datalake_Bullhorn_Query'[Job_Type] )
+    )
+
+VAR
+    -- VAR CandidatePrimaryJobType: This virtual table takes the complete, unbiased ranked list from the
+    -- previous step and distills it down to one row per candidate, identifying their single, true primary job.
+    CandidatePrimaryJobType =
+    ADDCOLUMNS (
+        -- First, get a unique, single-column list of all candidates from our ranked table.
+        SUMMARIZE ( PlacementsWithRank, 'Datalake_Bullhorn_Query'[CandidateID] ),
+        -- Then, for each unique candidate, add a new column called "PrimaryJobType".
+        "PrimaryJobType",
+        -- The CALCULATE function creates a "context transition," allowing us to evaluate an
+        -- expression for each individual candidate in the list from SUMMARIZE.
+        CALCULATE (
+            -- The final value we want is the Job Type. SELECTEDVALUE is safe and efficient here
+            -- because the TOPN function below is configured to only ever return one row.
+            SELECTEDVALUE ( 'Datalake_Bullhorn_Query'[Job_Type] ),
+            -- TOPN is used to find the single best placement for the current candidate.
+            TOPN (
+                1, -- We only want the Top 1 row.
+                CALCULATETABLE ( PlacementsWithRank ), -- We search within our complete ranked list from Step 1.
+                [PlacementRank], ASC, -- The "best" is the one with the lowest rank number (ASCending order).
+                'Datalake_Bullhorn_Query'[Job_Type], ASC -- If ranks are tied, use Job Type alphabetically as a tie-breaker.
+            )
+        )
+    )
+
+VAR
+    -- VAR SelectedJobTypes: This variable captures the current filter context of the visual.
+    -- It creates a list of whatever Job Types are currently being displayed on a row, in a slicer,
+    -- or in a chart filter. For a Grand Total row, this will contain all job types.
+    SelectedJobTypes =
+    VALUES ( 'Datalake_Bullhorn_Query'[Job_Type] )
+
+VAR
+    -- VAR FinalCandidatesToCount: This is the final filtering step. It connects the "ideal" list
+    -- of primary jobs (from Step 2) with the "actual" context of the visual (from Step 3).
+    FinalCandidatesToCount =
+    FILTER (
+        -- Take our definitive list of candidates and their primary jobs...
+        CandidatePrimaryJobType,
+        -- ...and keep only the rows where the primary job is one of the job types
+        -- currently visible in the report visual.
+        [PrimaryJobType] IN SelectedJobTypes
+    )
+
+RETURN
+    -- The final output is simply the count of rows in the filtered table from the previous step.
+    -- This gives the final, accurate, deduplicated count for the specific context of the visual's cell.
+    COUNTROWS ( FinalCandidatesToCount )
