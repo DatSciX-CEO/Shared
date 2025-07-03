@@ -24,6 +24,5 @@ WHERE
     regexp_matches(
         your_column_name,
         -- This regex avoids '?' and ':' characters for maximum client compatibility.
-        '(?i)((pw|password|username|log\\s*in|log\\s*on).*\\b\\S{1,15}\\b|\\b\\S{1,15}\\b.*(pw|password|username|log\\s*in|log\\s*on))'
-    );
-
+        '(?i)((pw|password|username|log\\s*in|log\\s*on).*(^|\\s)\\S{1,15}($|\\s)|(^|\\s)\\S{1,15}($|\\s).*(pw|password|username|log\\s*in|log\\s*on))'
+    )
