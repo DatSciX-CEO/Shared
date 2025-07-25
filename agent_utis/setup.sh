@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Agent Utis MVP Setup Script
-# This script sets up the local development environment for Agent Utis
+# This script sets up the local development environment for Agent Utis with Google ADK
 
 echo "Setting up Agent Utis MVP environment..."
 
@@ -22,19 +22,22 @@ echo "Installing Python packages..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Install Ollama (if not already installed)
-echo "Setting up Ollama..."
-if ! command -v ollama &> /dev/null; then
-    echo "Ollama not found. Please install Ollama from https://ollama.ai/"
-    echo "After installation, run: ollama pull mistral:7b"
-    exit 1
+# Copy environment file
+if [ ! -f .env ]; then
+    cp .env.example .env
+    echo "Environment file created. Please configure .env with your settings."
 fi
 
-# Pull Mistral model
-echo "Pulling Mistral 7B model..."
-ollama pull mistral:7b
-
 echo "Setup complete!"
+echo ""
+echo "Configuration:"
+echo "1. Edit .env file to configure your preferred model and settings"
+echo "2. Ensure you have access to the configured LLM model (default: gemini-2.0-flash-exp)"
+echo ""
 echo "To run the application:"
-echo "1. Start Ollama server: ollama serve"
-echo "2. Run Streamlit app: streamlit run main.py"
+echo "streamlit run main.py"
+echo ""
+echo "The application now uses Google ADK with the following architecture:"
+echo "- Main Agent: FinanceDirector"
+echo "- Sub-Agents: DataAnalyst, UtilizationExpert, SpendPredictor, ComplianceChecker"
+echo "- Tools: CSV analysis, utilization metrics, spend prediction, compliance checking"

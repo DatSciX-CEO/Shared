@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import os
 
-from agents import create_agent_system, AgentUtisSystem
+from agent_utis.agent import create_agent_system, AgentUtisSystem
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -188,9 +188,10 @@ def display_chat_interface():
         if st.session_state.agent_system and st.session_state.data is not None:
             with st.spinner("Analyzing your query..."):
                 try:
-                    response = st.session_state.agent_system.answer_query(
-                        query, st.session_state.data, st.session_state.analysis_results
-                    )
+                    import asyncio
+                    response = asyncio.run(st.session_state.agent_system.answer_query(
+                        query, st.session_state.analysis_results
+                    ))
                     st.session_state.chat_history.append((query, response))
                     st.rerun()
                 except Exception as e:
@@ -252,13 +253,14 @@ def main():
             if st.session_state.agent_system:
                 with st.spinner("Running comprehensive analysis..."):
                     try:
-                        results = st.session_state.agent_system.comprehensive_analysis(df)
+                        import asyncio
+                        results = asyncio.run(st.session_state.agent_system.comprehensive_analysis(df))
                         st.session_state.analysis_results = results
                         st.success("Analysis completed successfully!")
                     except Exception as e:
                         st.error(f"Error during analysis: {e}")
             else:
-                st.error("AI agents not initialized. Please check Ollama setup.")
+                st.error("AI agents not initialized. Please check Google ADK setup.")
         
         # Display analysis results
         if st.session_state.analysis_results:
@@ -316,10 +318,11 @@ def main():
     # Footer with agent status
     st.markdown("---")
     if st.session_state.agent_system:
-        agents_list = st.session_state.agent_system.list_agents()
-        st.markdown(f"*Powered by Ollama Mistral 7B and Google ADK | Active Agents: {', '.join(agents_list)}*")
+        agent_info = st.session_state.agent_system.get_agent_info()
+        sub_agents = ", ".join(agent_info.get("sub_agents", []))
+        st.markdown(f"*Powered by Google ADK | Main Agent: {agent_info.get('main_agent', 'Unknown')} | Sub-Agents: {sub_agents}*")
     else:
-        st.markdown("*Powered by Ollama Mistral 7B and Google ADK | Status: Agents not initialized*")
+        st.markdown("*Powered by Google ADK | Status: Agents not initialized*")
 
 if __name__ == "__main__":
     main()
