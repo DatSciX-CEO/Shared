@@ -12,7 +12,7 @@ from datetime import datetime
 import os
 import json
 
-from agents import create_agent_system, FinanceDirector
+from agents import create_agent_system
 from utils import (
     validate_data_types, 
     calculate_derived_metrics,
@@ -110,99 +110,10 @@ def display_analysis_results(results: Dict[str, Any]):
         st.write(results['executive_summary'])
         st.markdown("---")
     
-    # Create tabs for different analyses
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Utilization", "💰 Spend Forecast", "✅ Compliance", "📊 Data Overview"])
-    
-    with tab1:
-        util_data = results.get('utilization_analysis', {})
-        if 'error' not in util_data:
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                avg_util = util_data.get('avg_utilization', 0)
-                st.metric("Average Utilization", f"{avg_util:.1f}%", 
-                         delta=f"{avg_util - 75:.1f}%" if avg_util else None)
-            
-            with col2:
-                optimal = util_data.get('optimal_range', 0)
-                st.metric("In Optimal Range", optimal)
-            
-            with col3:
-                over_util = util_data.get('over_utilized', 0)
-                st.metric("Over-utilized", over_util,
-                         delta_color="inverse" if over_util > 0 else "normal")
-            
-            with col4:
-                under_util = util_data.get('under_utilized', 0)
-                st.metric("Under-utilized", under_util,
-                         delta_color="inverse" if under_util > 0 else "normal")
-            
-            if 'expert_analysis' in util_data:
-                st.subheader("Expert Analysis")
-                st.write(util_data['expert_analysis'])
-            
-            # Role analysis chart
-            if 'role_analysis' in util_data and st.session_state.data is not None:
-                fig = create_visualization(st.session_state.data, 'role_comparison')
-                st.pyplot(fig)
-        else:
-            st.error(f"Error in utilization analysis: {util_data['error']}")
-    
-    with tab2:
-        spend_data = results.get('spend_forecast', {})
-        if 'error' not in spend_data:
-            if 'predicted_monthly_spend' in spend_data:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.metric("Total Predicted Spend", 
-                             f"${spend_data.get('total_predicted', 0):,.2f}")
-                    st.metric("Monthly Trend", 
-                             f"${spend_data.get('historical_trend', 0):,.2f}")
-                
-                with col2:
-                    confidence = spend_data.get('confidence_level', 'Unknown')
-                    st.metric("Confidence Level", confidence)
-                
-                if 'analysis' in spend_data:
-                    st.subheader("Predictive Analysis")
-                    st.write(spend_data['analysis'])
-            else:
-                st.info(spend_data.get('error', 'No prediction available'))
-        else:
-            st.error(f"Error in spend forecast: {spend_data['error']}")
-    
-    with tab3:
-        compliance_data = results.get('compliance_status', {})
-        if 'error' not in compliance_data:
-            score = compliance_data.get('compliance_percentage', 0)
-            st.progress(score / 100)
-            st.metric("Compliance Score", f"{score:.0f}%")
-            
-            issues = compliance_data.get('issues', [])
-            if issues:
-                st.subheader("⚠️ Issues Identified")
-                for issue in issues:
-                    st.warning(issue)
-            
-            recommendations = compliance_data.get('recommendations', [])
-            if recommendations:
-                st.subheader("💡 Recommendations")
-                for rec in recommendations:
-                    st.info(rec)
-            
-            if 'analysis' in compliance_data:
-                st.subheader("Compliance Analysis")
-                st.write(compliance_data['analysis'])
-        else:
-            st.error(f"Error in compliance check: {compliance_data['error']}")
-    
-    with tab4:
-        data_overview = results.get('data_overview', {})
-        if 'error' not in data_overview:
-            st.json(data_overview)
-        else:
-            st.error(f"Error in data overview: {data_overview['error']}")
+    # The detailed tabs for utilization, spend, compliance, and data overview
+    # are removed as the agent now returns a single executive summary.
+    # If structured output is desired, the agent's prompt needs to be updated
+    # to return JSON that can be parsed here.
 
 def display_chat_interface():
     """Display chat interface for interactive queries"""
@@ -225,11 +136,7 @@ def display_chat_interface():
             if st.session_state.agent_system and st.session_state.data is not None:
                 with st.spinner("Analyzing your query..."):
                     try:
-                        response = st.session_state.agent_system.answer_query(
-                            query, 
-                            st.session_state.data,
-                            st.session_state.analysis_results
-                        )
+                        response = st.session_state.agent_system.answer_query(query)
                         st.session_state.chat_history.append((query, response))
                         st.rerun()
                     except Exception as e:
@@ -301,7 +208,7 @@ def main():
                 if st.session_state.agent_system:
                     with st.spinner("Running comprehensive analysis..."):
                         try:
-                            results = st.session_state.agent_system.comprehensive_analysis(df)
+                            results = await st.session_state.agent_system.comprehensive_analysis(df)
                             st.session_state.analysis_results = results
                             st.success("Analysis completed!")
                         except Exception as e:

@@ -5,11 +5,13 @@ Analyzes expert utilization rates and provides optimization recommendations
 
 import os
 from google.adk.agents import Agent
+from google.adk.llms.litellm import LiteLLM
 
 def create_utilization_expert_agent():
     """Create and configure the Utilization Expert sub-agent"""
     
-    model = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+    model_name = os.getenv("AGENT_MODEL", "ollama/mistral:7b")
+    llm = LiteLLM(model=model_name, api_base=os.getenv("OLLAMA_API_BASE", "http://localhost:11434"))
     
     instruction = """You are a Utilization Expert specializing in eDiscovery and legal services resource optimization. 
     You analyze expert utilization rates, identify efficiency patterns, and provide recommendations for workforce optimization.
@@ -27,7 +29,7 @@ def create_utilization_expert_agent():
     
     agent = Agent(
         name="UtilizationExpert",
-        model=model,
+        llm=llm,
         instruction=instruction,
         description="Analyzes expert utilization rates and provides optimization recommendations"
     )

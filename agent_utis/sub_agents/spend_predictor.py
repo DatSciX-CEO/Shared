@@ -5,11 +5,13 @@ Forecasts future spending based on historical data analysis
 
 import os
 from google.adk.agents import Agent
+from google.adk.llms.litellm import LiteLLM
 
 def create_spend_predictor_agent():
     """Create and configure the Spend Predictor sub-agent"""
     
-    model = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+    model_name = os.getenv("AGENT_MODEL", "ollama/mistral:7b")
+    llm = LiteLLM(model=model_name, api_base=os.getenv("OLLAMA_API_BASE", "http://localhost:11434"))
     
     instruction = """You are a Spend Predictor for legal and eDiscovery services with expertise in financial forecasting. 
     You analyze historical spending patterns and predict future costs using statistical methods.
@@ -27,7 +29,7 @@ def create_spend_predictor_agent():
     
     agent = Agent(
         name="SpendPredictor",
-        model=model,
+        llm=llm,
         instruction=instruction,
         description="Forecasts future spending based on historical data analysis"
     )

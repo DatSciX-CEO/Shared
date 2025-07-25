@@ -10,6 +10,7 @@ import logging
 
 from google.adk.agents import Agent
 from google.adk.tools import ToolContext
+from google.adk.llms.litellm import LiteLLM
 
 from .tools import TOOLS
 from ..sub_agents.data_analyst import create_data_analyst_agent
@@ -22,32 +23,32 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def setup_before_agent_call(tool_context: ToolContext) -> None:
-    """
+    \"\"\"
     Setup function called before agent interactions
     Prepares the context with necessary configurations
-    """
-    # Initialize any required context state
-    if not hasattr(tool_context, 'state'):
+    \"\"\"\n    # Initialize any required context state
+    if not hasattr(tool_context, \'state\'):
         tool_context.state = {}
     
-    logger.info("Agent context initialized successfully")
+    logger.info(\"Agent context initialized successfully\")
 
 def create_finance_director_agent(dataframe: Optional[pd.DataFrame] = None) -> Agent:
-    """
-    Create and configure the Finance Director agent with sub-agents and tools
+    \"\"\"\n    Create and configure the Finance Director agent with sub-agents and tools
     
     Args:
         dataframe: Optional pandas DataFrame to store in context
     
     Returns:
         Configured Agent instance
-    """
-    
+    \"\"\"\n    
     # Get model from environment or use default
-    model = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+    model_name = os.getenv(\"AGENT_MODEL\", \"ollama/mistral:7b\") # Changed to Ollama format
+    
+    # Configure LiteLLM for Ollama
+    llm = LiteLLM(model=model_name, api_base=os.getenv(\"OLLAMA_API_BASE\", \"http://localhost:11434\"))
     
     # Main agent instruction
-    instruction = """You are the Finance Director overseeing eDiscovery and legal services operations. 
+    instruction = \"\"\"You are the Finance Director overseeing eDiscovery and legal services operations. 
     Your role is to orchestrate analysis across all departments and synthesize comprehensive reports on utilization, 
     cost efficiency, predictions, and compliance. You delegate specific tasks to specialized sub-agents and combine 
     their insights to provide executive-level recommendations for decision-making in legal operations.
@@ -67,12 +68,10 @@ def create_finance_director_agent(dataframe: Optional[pd.DataFrame] = None) -> A
     - predict_future_spend: For financial forecasting and budget planning
     - check_compliance_metrics: For industry compliance and benchmark analysis
     
-    Use these tools to provide thorough analysis and recommendations."""
-    
+    Use these tools to provide thorough analysis and recommendations.\"\"\"\n    
     # Global instruction for all interactions
-    global_instruction = """You are an expert in eDiscovery utilization analysis. 
-    Provide accurate, data-driven insights with specific recommendations for legal operations optimization."""
-    
+    global_instruction = \"\"\"You are an expert in eDiscovery utilization analysis. 
+    Provide accurate, data-driven insights with specific recommendations for legal operations optimization.\"\"\"\n    
     # Create sub-agents
     sub_agents = [
         create_data_analyst_agent(),
@@ -83,29 +82,27 @@ def create_finance_director_agent(dataframe: Optional[pd.DataFrame] = None) -> A
     
     # Create the main agent
     agent = Agent(
-        name="FinanceDirector",
-        model=model,
+        name=\"FinanceDirector\",
+        llm=llm, # Use LiteLLM instance
         instruction=instruction,
         global_instruction=global_instruction,
         sub_agents=sub_agents,
         tools=TOOLS,
         before_agent_call=setup_before_agent_call,
         generation_config={
-            "temperature": 0.1,  # Low temperature for consistent analysis
-            "top_p": 0.9,
-            "top_k": 40,
-            "max_output_tokens": 2048
+            \"temperature\": 0.1,  # Low temperature for consistent analysis
+            \"top_p\": 0.9,
+            \"top_k\": 40,
+            \"max_output_tokens\": 2048
         }
     )
     
-    logger.info("Finance Director agent created with 4 sub-agents and 4 tools")
+    logger.info(\"Finance Director agent created with 4 sub-agents and 4 tools\")
     return agent
 
 class AgentUtisSystem:
-    """
-    Main system for managing Agent Utis operations
-    """
-    
+    \"\"\"\n    Main system for managing Agent Utis operations
+    \"\"\"\n    
     def __init__(self, dataframe: Optional[pd.DataFrame] = None):
         self.dataframe = dataframe
         self.agent = create_finance_director_agent(dataframe)
@@ -113,84 +110,73 @@ class AgentUtisSystem:
         
         # Store dataframe in context if provided
         if dataframe is not None:
-            self.tool_context.state = {'dataframe': dataframe}
+            self.tool_context.state = {\'dataframe\': dataframe}
         else:
             self.tool_context.state = {}
     
     def set_dataframe(self, df: pd.DataFrame) -> None:
-        """Set or update the dataframe for analysis"""
-        self.dataframe = df
-        self.tool_context.state['dataframe'] = df
-        logger.info(f"Dataframe updated with {len(df)} records")
+        \"\"\"Set or update the dataframe for analysis\"\"\"\n        self.dataframe = df
+        self.tool_context.state[\'dataframe\'] = df
+        logger.info(f\"Dataframe updated with {len(df)} records\")
     
     async def comprehensive_analysis(self, df: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
-        """
-        Run comprehensive analysis using all available tools
+        \"\"\"\n        Run comprehensive analysis using all available tools
         
         Args:
             df: Optional dataframe to analyze
         
         Returns:
             Dictionary containing all analysis results
-        """
-        try:
+        \"\"\"\n        try:
             # Update dataframe if provided
             if df is not None:
                 self.set_dataframe(df)
             
             if self.dataframe is None:
-                return {"error": "No dataframe available for analysis"}
+                return {\"error\": \"No dataframe available for analysis\"}
+            
+            # The Finance Director agent will orchestrate the analysis
+            # by calling the appropriate tools and sub-agents.
+            # We provide a prompt that encourages it to use all relevant tools.
+            analysis_prompt = \"\"\"Perform a comprehensive analysis of the provided eDiscovery utilization data. \
+            This should include data overview, utilization metrics, spend prediction, and compliance checks. \
+            Synthesize all findings into a detailed executive summary with actionable recommendations.\"\"\"
+            
+            # Run the agent with the comprehensive analysis prompt
+            response = await self.agent.run_async(
+                prompt=analysis_prompt,
+                tool_context=self.tool_context
+            )
+            
+            # The response from agent.run_async() will contain the synthesized results
+            # You might need to parse this response based on how the Finance Director agent
+            # is instructed to format its output. For now, we'll return the raw response.
+            
+            # In a real scenario, you'd likely have the Finance Director agent
+            # output a structured JSON or a well-formatted string that can be parsed.
+            # For this MVP, we'll assume the agent's response is the executive summary.
             
             results = {
-                "analysis_timestamp": pd.Timestamp.now().isoformat(),
-                "data_overview": {},
-                "utilization_analysis": {},
-                "spend_forecast": {},
-                "compliance_status": {},
-                "executive_summary": ""
+                \"analysis_timestamp\": pd.Timestamp.now().isoformat(),
+                \"executive_summary\": response.text # Assuming the agent's final response is the summary
             }
             
-            # Run data analysis
-            data_result = await self.agent.tools[0]["function"]("Analyze the CSV data", self.tool_context)
-            results["data_overview"] = data_result
-            
-            # Run utilization analysis
-            util_result = await self.agent.tools[1]["function"]("Calculate utilization metrics", self.tool_context)
-            results["utilization_analysis"] = util_result
-            
-            # Run spend prediction
-            spend_result = await self.agent.tools[2]["function"]("Predict future spending", self.tool_context)
-            results["spend_forecast"] = spend_result
-            
-            # Run compliance check
-            compliance_result = await self.agent.tools[3]["function"]("Check compliance metrics", self.tool_context)
-            results["compliance_status"] = compliance_result
-            
-            # Generate executive summary using the main agent
-            summary_prompt = f"""
-            Based on the comprehensive analysis results:
-            
-            Data Overview: {data_result}
-            Utilization Analysis: {util_result}
-            Spend Forecast: {spend_result}
-            Compliance Status: {compliance_result}
-            
-            Provide a comprehensive executive summary with key findings and strategic recommendations for eDiscovery operations management.
-            """
-            
-            # Note: In a full implementation, you would use agent.run_async() here
-            # For now, we'll use a placeholder
-            results["executive_summary"] = "Executive summary would be generated using the Finance Director agent"
+            # If the agent was designed to output structured data, you would parse it here.
+            # For example, if it outputs JSON:
+            # try:
+            #     parsed_response = json.loads(response.text)
+            #     results.update(parsed_response)
+            # except json.JSONDecodeError:
+            #     logger.warning(\"Agent response was not valid JSON.\")
             
             return results
             
         except Exception as e:
-            logger.error(f"Error in comprehensive analysis: {e}")
-            return {"error": str(e)}
+            logger.error(f\"Error in comprehensive analysis: {e}\")
+            return {\"error\": str(e)}
     
     async def answer_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> str:
-        """
-        Answer specific queries using the Finance Director agent
+        \"\"\"\n        Answer specific queries using the Finance Director agent
         
         Args:
             query: User query about the data
@@ -198,54 +184,42 @@ class AgentUtisSystem:
         
         Returns:
             Agent response to the query
-        """
-        try:
+        \"\"\"\n        try:
             if self.dataframe is None:
-                return "No data available for analysis. Please upload a CSV file first."
+                return \"No data available for analysis. Please upload a CSV file first.\"\n            
+            # The Finance Director agent will answer the query using its tools and sub-agents
+            response = await self.agent.run_async(
+                prompt=query,
+                tool_context=self.tool_context
+            )
             
-            # In a full implementation, you would use agent.run_async() with the query
-            # For now, we'll provide a structured response based on available context
-            
-            response = f"""
-            Based on the available eDiscovery utilization data with {len(self.dataframe)} records:
-            
-            Query: {query}
-            
-            [This would be processed by the Finance Director agent using the available tools and sub-agents]
-            
-            The agent would analyze your specific question and provide data-driven insights with actionable recommendations.
-            """
-            
-            return response
+            return response.text # Return the agent's text response
             
         except Exception as e:
-            logger.error(f"Error answering query: {e}")
-            return "I apologize, but I encountered an error processing your query."
-    
+            logger.error(f\"Error answering query: {e}\")
+            return \"I apologize, but I encountered an error processing your query.\"\n    
     def get_agent_info(self) -> Dict[str, Any]:
-        """Get information about the agent system"""
-        return {
-            "main_agent": self.agent.name,
-            "sub_agents": [sub_agent.name for sub_agent in self.agent.sub_agents] if self.agent.sub_agents else [],
-            "tools": [tool["name"] for tool in self.agent.tools] if self.agent.tools else [],
-            "model": self.agent.model,
-            "data_loaded": self.dataframe is not None,
-            "data_records": len(self.dataframe) if self.dataframe is not None else 0
+        \"\"\"\n        Get information about the agent system
+        \"\"\"\n        return {
+            \"main_agent\": self.agent.name,
+            \"sub_agents\": [sub_agent.name for sub_agent in self.agent.sub_agents] if self.agent.sub_agents else [],
+            \"tools\": [tool.name for tool in self.agent.tools] if self.agent.tools else [], # Access .name attribute
+            \"model\": self.agent.llm.model, # Access model from llm object
+            \"data_loaded\": self.dataframe is not None,
+            \"data_records\": len(self.dataframe) if self.dataframe is not None else 0
         }
 
 # Factory function for easy initialization
 def create_agent_system(dataframe: Optional[pd.DataFrame] = None) -> AgentUtisSystem:
-    """
-    Create and initialize the complete Agent Utis system
+    \"\"\"\n    Create and initialize the complete Agent Utis system
     
     Args:
         dataframe: Optional pandas DataFrame for analysis
     
     Returns:
         Configured AgentUtisSystem instance
-    """
-    try:
+    \"\"\"\n    try:
         return AgentUtisSystem(dataframe)
     except Exception as e:
-        logger.error(f"Error creating agent system: {e}")
+        logger.error(f\"Error creating agent system: {e}\")
         raise

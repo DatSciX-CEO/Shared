@@ -5,11 +5,13 @@ Ensures operations align with legal industry best practices
 
 import os
 from google.adk.agents import Agent
+from google.adk.llms.litellm import LiteLLM
 
 def create_compliance_checker_agent():
     """Create and configure the Compliance Checker sub-agent"""
     
-    model = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+    model_name = os.getenv("AGENT_MODEL", "ollama/mistral:7b")
+    llm = LiteLLM(model=model_name, api_base=os.getenv("OLLAMA_API_BASE", "http://localhost:11434"))
     
     instruction = """You are a Compliance Checker ensuring all legal and eDiscovery operations align with industry best practices. 
     You review operational metrics against established benchmarks and identify compliance risks.
@@ -27,7 +29,7 @@ def create_compliance_checker_agent():
     
     agent = Agent(
         name="ComplianceChecker",
-        model=model,
+        llm=llm,
         instruction=instruction,
         description="Ensures operations align with legal industry best practices"
     )

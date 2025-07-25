@@ -265,24 +265,24 @@ async def check_compliance_metrics(question: str, tool_context: ToolContext) -> 
 
 # Tool definitions for agent registration
 TOOLS = [
-    {
-        "name": "analyze_csv_data",
-        "description": "Analyze CSV data and provide comprehensive data insights for eDiscovery utilization",
-        "function": analyze_csv_data
-    },
-    {
-        "name": "calculate_utilization_metrics", 
-        "description": "Calculate utilization rates, efficiency metrics, and cost analysis for legal experts",
-        "function": calculate_utilization_metrics
-    },
-    {
-        "name": "predict_future_spend",
-        "description": "Forecast future spending using historical data and regression analysis",
-        "function": predict_future_spend
-    },
-    {
-        "name": "check_compliance_metrics",
-        "description": "Check operational metrics against legal industry compliance benchmarks",
-        "function": check_compliance_metrics
-    }
+    AgentTool(
+        name="analyze_csv_data",
+        description="Analyze CSV data and provide comprehensive data insights for eDiscovery utilization",
+        function=analyze_csv_data
+    ),
+    AgentTool(
+        name="calculate_utilization_metrics", 
+        description="Calculate utilization rates, efficiency metrics, and cost analysis for legal experts",
+        function=calculate_utilization_metrics
+    ),
+    AgentTool(
+        name="predict_future_spend",
+        description="Forecast future spending using historical data and regression analysis",
+        function=predict_future_spend
+    ),
+    AgentTool(
+        name="check_compliance_metrics",
+        description="Check operational metrics against legal industry compliance benchmarks",
+        function=check_compliance_metrics
+    )
 ]
