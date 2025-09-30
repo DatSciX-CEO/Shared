@@ -1,0 +1,16 @@
+expert_id,expert_name,role,project_id,project_name,start_date,end_date,billable_hours,total_hours,hourly_rate,total_cost,utilization_rate,date
+EXP001,Sarah Johnson,Document Reviewer,PROJ001,Litigation Support Alpha,2024-01-01,2024-01-31,152,200,125,19000,76.0,2024-01-31
+EXP002,Michael Chen,Legal Analyst,PROJ002,eDiscovery Beta,2024-01-01,2024-01-31,180,200,150,27000,90.0,2024-01-31
+EXP003,Emily Rodriguez,Senior Reviewer,PROJ001,Litigation Support Alpha,2024-01-01,2024-01-31,140,180,175,24500,77.8,2024-01-31
+EXP004,David Wilson,Document Analyst,PROJ003,Contract Review Gamma,2024-01-01,2024-01-31,120,160,100,12000,75.0,2024-01-31
+EXP005,Lisa Thompson,Legal Tech Specialist,PROJ002,eDiscovery Beta,2024-01-01,2024-01-31,165,180,200,33000,91.7,2024-01-31
+EXP006,Robert Kim,Junior Reviewer,PROJ004,Regulatory Delta,2024-01-01,2024-01-31,100,160,85,8500,62.5,2024-01-31
+EXP007,Jennifer Martinez,Data Analyst,PROJ003,Contract Review Gamma,2024-01-01,2024-01-31,135,160,140,18900,84.4,2024-01-31
+EXP008,Thomas Anderson,Senior Analyst,PROJ001,Litigation Support Alpha,2024-01-01,2024-01-31,170,200,180,30600,85.0,2024-01-31
+EXP009,Amanda Foster,Review Manager,PROJ002,eDiscovery Beta,2024-01-01,2024-01-31,145,160,220,31900,90.6,2024-01-31
+EXP010,James Parker,Document Specialist,PROJ004,Regulatory Delta,2024-01-01,2024-01-31,110,180,110,12100,61.1,2024-01-31
+EXP001,Sarah Johnson,Document Reviewer,PROJ005,Compliance Epsilon,2024-02-01,2024-02-29,148,190,125,18500,77.9,2024-02-29
+EXP002,Michael Chen,Legal Analyst,PROJ002,eDiscovery Beta,2024-02-01,2024-02-29,175,190,150,26250,92.1,2024-02-29
+EXP003,Emily Rodriguez,Senior Reviewer,PROJ005,Compliance Epsilon,2024-02-01,2024-02-29,135,170,175,23625,79.4,2024-02-29
+EXP011,Karen White,Forensic Analyst,PROJ006,Investigation Zeta,2024-02-01,2024-02-29,160,180,250,40000,88.9,2024-02-29
+EXP012,Mark Davis,eDiscovery Consultant,PROJ006,Investigation Zeta,2024-02-01,2024-02-29,155,170,300,46500,91.2,2024-02-29
