@@ -1,0 +1,41 @@
+Position Title,Units,Bill Rate,Cost,Line Item Description,Type of Case,Law Firm
+Partner,2.5,950.00,2375.00,Case strategy meeting and client consultation,Litigation,Smith & Associates
+Associate,5.0,450.00,2250.00,Document review and privilege analysis,Litigation,Smith & Associates
+Paralegal,8.0,150.00,1200.00,Document review - first pass,Litigation,Smith & Associates
+Partner,1.0,950.00,950.00,Document review for production,Litigation,Smith & Associates
+Associate,3.0,450.00,1350.00,Legal research on motion to dismiss,Litigation,Smith & Associates
+Paralegal,12.0,150.00,1800.00,Document review - privilege review,Litigation,Smith & Associates
+Partner,4.0,950.00,3800.00,Deposition preparation and attendance,Litigation,Smith & Associates
+Associate,6.0,450.00,2700.00,Document review and coding,Litigation,Smith & Associates
+Paralegal,10.0,150.00,1500.00,Document review - responsiveness review,Litigation,Smith & Associates
+Partner,2.0,950.00,1900.00,Review of discovery responses,Litigation,Smith & Associates
+Associate,4.0,450.00,1800.00,Document review for privilege,Litigation,Smith & Associates
+Paralegal,15.0,150.00,2250.00,Document review - quality control,Litigation,Smith & Associates
+Partner,3.0,950.00,2850.00,Document review and analysis,Litigation,Smith & Associates
+Associate,7.0,450.00,3150.00,Document review - privilege review,Litigation,Smith & Associates
+Paralegal,20.0,150.00,3000.00,Document review - production preparation,Litigation,Smith & Associates
+Partner,1.5,950.00,1425.00,Client meeting and case update,Contract,Johnson Legal Group
+Associate,4.0,450.00,1800.00,Contract review and analysis,Contract,Johnson Legal Group
+Paralegal,6.0,150.00,900.00,Document organization and filing,Contract,Johnson Legal Group
+Partner,2.0,950.00,1900.00,Negotiation strategy discussion,Contract,Johnson Legal Group
+Associate,5.0,450.00,2250.00,Contract drafting and revisions,Contract,Johnson Legal Group
+Paralegal,8.0,150.00,1200.00,Document review and indexing,Contract,Johnson Legal Group
+Partner,1.0,950.00,950.00,Document review for compliance,Contract,Johnson Legal Group
+Associate,3.0,450.00,1350.00,Legal research on contract terms,Contract,Johnson Legal Group
+Paralegal,10.0,150.00,1500.00,Document review and organization,Contract,Johnson Legal Group
+Partner,2.5,950.00,2375.00,Final contract review and execution,Contract,Johnson Legal Group
+Associate,4.0,450.00,1800.00,Document review for accuracy,Contract,Johnson Legal Group
+Paralegal,12.0,150.00,1800.00,Document review and quality check,Contract,Johnson Legal Group
+Partner,3.0,950.00,2850.00,Document review and analysis,Regulatory,Williams & Partners
+Associate,6.0,450.00,2700.00,Regulatory compliance review,Regulatory,Williams & Partners
+Paralegal,9.0,150.00,1350.00,Document review for regulatory filing,Regulatory,Williams & Partners
+Partner,2.0,950.00,1900.00,Document review and compliance check,Regulatory,Williams & Partners
+Associate,5.0,450.00,2250.00,Document review for submission,Regulatory,Williams & Partners
+Paralegal,11.0,150.00,1650.00,Document review and organization,Regulatory,Williams & Partners
+Partner,1.5,950.00,1425.00,Document review for accuracy,Regulatory,Williams & Partners
+Associate,4.0,450.00,1800.00,Regulatory research and analysis,Regulatory,Williams & Partners
+Paralegal,7.0,150.00,1050.00,Document review and filing,Regulatory,Williams & Partners
+Partner,2.0,950.00,1900.00,Document review and final check,Regulatory,Williams & Partners
+Associate,3.0,450.00,1350.00,Document review for compliance,Regulatory,Williams & Partners
+Paralegal,8.0,150.00,1200.00,Document review and quality assurance,Regulatory,Williams & Partners
+
