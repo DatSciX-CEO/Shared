@@ -1,0 +1,18 @@
+# Backend Dependencies
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18
+pandas==2.2.3
+datacompy==0.14.1
+ollama==0.4.5
+openpyxl==3.1.5
+python-dotenv==1.0.1
+
+# Streamlit App
+streamlit==1.41.1
+plotly==5.24.1
+ydata-profiling==4.12.0
+
+# CORS
+pydantic==2.10.4
+
