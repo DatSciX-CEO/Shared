@@ -54,6 +54,12 @@ export interface ComparisonResult {
   }>;
   text_report: string;
   statistics?: Record<string, unknown>;
+  file1?: string;
+  file2?: string;
+}
+
+export interface MultiComparisonResult {
+  comparisons: ComparisonResult[];
 }
 
 export interface OllamaModel {
@@ -142,18 +148,16 @@ export function useApi() {
   // Comparison Operations
   const compareFiles = useCallback(async (
     sessionId: string,
-    file1: string,
-    file2: string,
+    files: string[],
     joinColumns: string[],
     ignoreColumns?: string[]
-  ): Promise<ComparisonResult | null> => {
+  ): Promise<MultiComparisonResult | null> => {
     setLoading(true);
     setError(null);
     try {
       const response = await api.post('/compare', {
         session_id: sessionId,
-        file1,
-        file2,
+        files,
         join_columns: joinColumns,
         ignore_columns: ignoreColumns,
       });
@@ -236,4 +240,3 @@ export function useApi() {
 }
 
 export default useApi;
-
