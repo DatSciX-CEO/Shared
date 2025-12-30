@@ -1,5 +1,6 @@
 """
 AI Service - Ollama integration for intelligent data analysis.
+Enhanced with detailed model metadata and intelligent auto-selection.
 """
 import ollama
 from typing import Optional
@@ -9,25 +10,175 @@ import json
 class AIService:
     """Handles AI-powered analysis using Ollama."""
     
+    # Preferred models in priority order for auto-selection
+    PREFERRED_MODELS = ["llama3.2", "llama3.1", "llama3", "mistral", "phi3", "gemma2", "qwen2"]
     DEFAULT_MODELS = ["llama3.2", "mistral", "phi3", "gemma2"]
     
     @classmethod
-    def get_available_models(cls) -> list[dict]:
-        """Fetch list of available Ollama models."""
+    def _format_size(cls, size_bytes: int) -> str:
+        """Convert bytes to human-readable size string."""
+        if size_bytes == 0:
+            return "Unknown"
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if abs(size_bytes) < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} PB"
+    
+    @classmethod
+    def _extract_quantization(cls, model_name: str, details: dict) -> str:
+        """Extract quantization level from model name or details."""
+        # Common quantization patterns
+        quant_patterns = ['q4_0', 'q4_1', 'q4_k_m', 'q4_k_s', 'q5_0', 'q5_1', 
+                         'q5_k_m', 'q5_k_s', 'q6_k', 'q8_0', 'fp16', 'f16', 'f32']
+        
+        name_lower = model_name.lower()
+        for pattern in quant_patterns:
+            if pattern in name_lower:
+                return pattern.upper()
+        
+        # Check details for quantization info
+        quant = details.get("quantization_level", "")
+        if quant:
+            return quant.upper()
+        
+        return "Default"
+    
+    @classmethod
+    def _extract_parameter_count(cls, details: dict) -> str:
+        """Extract parameter count from model details."""
+        param_size = details.get("parameter_size", "")
+        if param_size:
+            return param_size
+        
+        # Try to infer from family/format
+        families = details.get("families", [])
+        if families:
+            return ", ".join(families)
+        
+        return "Unknown"
+    
+    @classmethod
+    def check_ollama_status(cls) -> dict:
+        """Check if Ollama is running and accessible."""
+        try:
+            response = ollama.list()
+            model_count = len(response.get("models", []))
+            return {
+                "online": True,
+                "model_count": model_count,
+                "message": f"Ollama is running with {model_count} model(s) available"
+            }
+        except Exception as e:
+            error_msg = str(e)
+            if "connection" in error_msg.lower() or "refused" in error_msg.lower():
+                return {
+                    "online": False,
+                    "model_count": 0,
+                    "message": "Ollama is not running. Start it with 'ollama serve'",
+                    "error": error_msg,
+                    "setup_hint": "Install Ollama from https://ollama.com and run 'ollama pull llama3.2'"
+                }
+            return {
+                "online": False,
+                "model_count": 0,
+                "message": f"Ollama error: {error_msg}",
+                "error": error_msg
+            }
+    
+    @classmethod
+    def get_available_models(cls) -> dict:
+        """
+        Fetch list of available Ollama models with detailed metadata.
+        
+        Returns:
+            dict with 'models' list and 'status' info
+        """
         try:
             response = ollama.list()
             models = []
+            
             for model in response.get("models", []):
+                details = model.get("details", {})
+                name = model.get("name", "unknown")
+                size_bytes = model.get("size", 0)
+                
                 models.append({
-                    "name": model.get("name", "unknown"),
-                    "size": model.get("size", 0),
+                    "name": name,
+                    "size": size_bytes,
+                    "size_human": cls._format_size(size_bytes),
                     "modified_at": model.get("modified_at", ""),
-                    "family": model.get("details", {}).get("family", "unknown"),
+                    "family": details.get("family", "unknown"),
+                    "parameter_size": details.get("parameter_size", "Unknown"),
+                    "quantization": cls._extract_quantization(name, details),
+                    "format": details.get("format", "unknown"),
+                    "families": details.get("families", []),
+                    "is_available": True,
                 })
-            return models if models else [{"name": m, "size": 0, "family": "default"} for m in cls.DEFAULT_MODELS]
+            
+            # Sort by preference order, then alphabetically
+            def sort_key(m):
+                name_lower = m["name"].lower()
+                for idx, pref in enumerate(cls.PREFERRED_MODELS):
+                    if pref in name_lower:
+                        return (0, idx, m["name"])
+                return (1, 999, m["name"])
+            
+            models.sort(key=sort_key)
+            
+            # Determine recommended model
+            recommended = None
+            for pref in cls.PREFERRED_MODELS:
+                for model in models:
+                    if pref in model["name"].lower():
+                        recommended = model["name"]
+                        break
+                if recommended:
+                    break
+            
+            if not recommended and models:
+                recommended = models[0]["name"]
+            
+            return {
+                "models": models,
+                "status": {
+                    "online": True,
+                    "count": len(models),
+                    "recommended": recommended,
+                },
+            }
+            
         except Exception as e:
-            # Return defaults if Ollama is not running
-            return [{"name": m, "size": 0, "family": "default", "error": str(e)} for m in cls.DEFAULT_MODELS]
+            error_msg = str(e)
+            is_connection_error = "connection" in error_msg.lower() or "refused" in error_msg.lower()
+            
+            # Return placeholder models with offline status
+            placeholder_models = [
+                {
+                    "name": m,
+                    "size": 0,
+                    "size_human": "N/A",
+                    "modified_at": "",
+                    "family": "default",
+                    "parameter_size": "Unknown",
+                    "quantization": "Unknown",
+                    "format": "unknown",
+                    "families": [],
+                    "is_available": False,
+                }
+                for m in cls.DEFAULT_MODELS
+            ]
+            
+            return {
+                "models": placeholder_models,
+                "status": {
+                    "online": False,
+                    "count": 0,
+                    "recommended": None,
+                    "error": error_msg,
+                    "setup_hint": "Install Ollama from https://ollama.com and run 'ollama serve'" if is_connection_error else None,
+                },
+            }
     
     @classmethod
     def analyze_comparison(cls, model_name: str, comparison_summary: dict, 
@@ -110,7 +261,8 @@ Return your answer as a JSON object with this structure:
                 if json_match:
                     result = json.loads(json_match.group())
                     return {"success": True, **result}
-            except:
+            except (json.JSONDecodeError, AttributeError, KeyError):
+                # JSON extraction failed, fall through to return raw content
                 pass
             
             return {

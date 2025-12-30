@@ -12,7 +12,27 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
+    <!-- Debug: Initial loading indicator -->
+    <div id="loading-debug" style="position:fixed;top:0;left:0;right:0;padding:20px;background:#ff0;color:#000;font-family:monospace;z-index:99999;">
+      LOADING... If you see this for more than 2 seconds, JavaScript failed to load.
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Debug: Remove loading indicator once React loads
+      window.__DEBUG_REACT_LOADED = function() {
+        const el = document.getElementById('loading-debug');
+        if (el) el.style.display = 'none';
+      };
+      // Fallback: If JS never loads, indicator stays visible
+      setTimeout(function() {
+        const el = document.getElementById('loading-debug');
+        if (el && el.style.display !== 'none') {
+          el.innerHTML = 'ERROR: JavaScript failed to initialize. Check browser console (F12).';
+          el.style.background = '#f00';
+          el.style.color = '#fff';
+        }
+      }, 5000);
+    </script>
   </body>
 </html>

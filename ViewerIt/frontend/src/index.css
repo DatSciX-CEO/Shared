@@ -311,3 +311,344 @@
 .neon-flicker {
   animation: flicker 3s infinite;
 }
+
+/* ============================================
+   CRT / SCANLINE EFFECTS
+   ============================================ */
+
+/* Full-screen CRT overlay */
+.crt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.crt-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    transparent 50%,
+    rgba(0, 0, 0, 0.03) 50%
+  );
+  background-size: 100% 3px;
+  animation: scanlines 0.05s linear infinite;
+}
+
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
+}
+
+/* CRT flicker effect for specific elements */
+.crt-flicker {
+  animation: crt-flicker 0.15s infinite;
+}
+
+@keyframes crt-flicker {
+  0% { opacity: 0.97; }
+  50% { opacity: 1; }
+  100% { opacity: 0.98; }
+}
+
+/* ============================================
+   NEON GLOW EFFECTS
+   ============================================ */
+
+/* Intense neon text glow */
+.neon-glow-cyan {
+  color: var(--color-neon-cyan);
+  text-shadow: 
+    0 0 5px var(--color-neon-cyan),
+    0 0 10px var(--color-neon-cyan),
+    0 0 20px var(--color-neon-cyan),
+    0 0 40px var(--color-neon-cyan);
+}
+
+.neon-glow-pink {
+  color: var(--color-neon-pink);
+  text-shadow: 
+    0 0 5px var(--color-neon-pink),
+    0 0 10px var(--color-neon-pink),
+    0 0 20px var(--color-neon-pink),
+    0 0 40px var(--color-neon-pink);
+}
+
+.neon-glow-magenta {
+  color: var(--color-neon-magenta);
+  text-shadow: 
+    0 0 5px var(--color-neon-magenta),
+    0 0 10px var(--color-neon-magenta),
+    0 0 20px var(--color-neon-magenta),
+    0 0 40px var(--color-neon-magenta);
+}
+
+/* Box neon glow */
+.neon-box-cyan {
+  box-shadow: 
+    0 0 5px var(--color-neon-cyan),
+    0 0 10px var(--color-neon-cyan),
+    inset 0 0 5px rgba(0, 245, 255, 0.1);
+}
+
+.neon-box-pink {
+  box-shadow: 
+    0 0 5px var(--color-neon-pink),
+    0 0 10px var(--color-neon-pink),
+    inset 0 0 5px rgba(255, 0, 128, 0.1);
+}
+
+/* ============================================
+   HOLOGRAM EFFECT
+   ============================================ */
+
+.hologram {
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 245, 255, 0.1) 0%,
+    transparent 50%,
+    rgba(255, 0, 255, 0.1) 100%
+  );
+  animation: hologram-shift 3s ease-in-out infinite;
+}
+
+.hologram::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 245, 255, 0.03) 2px,
+    rgba(0, 245, 255, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+@keyframes hologram-shift {
+  0%, 100% { 
+    background-position: 0% 0%;
+    filter: hue-rotate(0deg);
+  }
+  50% { 
+    background-position: 100% 100%;
+    filter: hue-rotate(10deg);
+  }
+}
+
+/* ============================================
+   CYBER BORDER ANIMATIONS
+   ============================================ */
+
+.cyber-border-animated {
+  position: relative;
+  border: 1px solid transparent;
+  background: 
+    linear-gradient(var(--color-cyber-dark), var(--color-cyber-dark)) padding-box,
+    linear-gradient(90deg, var(--color-neon-cyan), var(--color-neon-magenta), var(--color-neon-cyan)) border-box;
+  background-size: 100% 100%, 200% 100%;
+  animation: border-flow 3s linear infinite;
+}
+
+@keyframes border-flow {
+  0% { background-position: 0% 0%, 0% 0%; }
+  100% { background-position: 0% 0%, 200% 0%; }
+}
+
+/* Corner accent borders */
+.cyber-corners {
+  position: relative;
+}
+
+.cyber-corners::before,
+.cyber-corners::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-neon-cyan);
+}
+
+.cyber-corners::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.cyber-corners::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+}
+
+/* ============================================
+   DATA VISUALIZATION ENHANCEMENTS
+   ============================================ */
+
+/* Glow effect for chart elements */
+.chart-glow {
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+/* Pulsing data points */
+.data-point-pulse {
+  animation: data-pulse 2s ease-in-out infinite;
+}
+
+@keyframes data-pulse {
+  0%, 100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* ============================================
+   LOADING & STATUS INDICATORS
+   ============================================ */
+
+/* Cyber loading bar */
+.cyber-loading-bar {
+  position: relative;
+  height: 4px;
+  background: var(--color-cyber-light);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cyber-loading-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, var(--color-neon-cyan), var(--color-neon-magenta));
+  border-radius: 2px;
+  animation: loading-slide 1.5s ease-in-out infinite;
+}
+
+@keyframes loading-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/* Status indicator with glow */
+.status-online {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-neon-green);
+  box-shadow: 
+    0 0 5px var(--color-neon-green),
+    0 0 10px var(--color-neon-green);
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+.status-warning {
+  background: var(--color-neon-yellow);
+  box-shadow: 
+    0 0 5px var(--color-neon-yellow),
+    0 0 10px var(--color-neon-yellow);
+}
+
+.status-error {
+  background: var(--color-neon-pink);
+  box-shadow: 
+    0 0 5px var(--color-neon-pink),
+    0 0 10px var(--color-neon-pink);
+}
+
+@keyframes status-pulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* ============================================
+   GLITCH TRANSITION EFFECTS
+   ============================================ */
+
+.glitch-transition {
+  animation: glitch-in 0.3s ease-out forwards;
+}
+
+@keyframes glitch-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+    filter: blur(2px);
+  }
+  30% {
+    opacity: 0.5;
+    transform: translateX(5px);
+    filter: blur(1px);
+  }
+  60% {
+    opacity: 0.8;
+    transform: translateX(-3px);
+    filter: blur(0.5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+/* RGB split on hover */
+.rgb-split:hover {
+  animation: rgb-split 0.2s ease-out;
+}
+
+@keyframes rgb-split {
+  0%, 100% {
+    text-shadow: none;
+  }
+  25% {
+    text-shadow: 
+      -2px 0 var(--color-neon-cyan),
+      2px 0 var(--color-neon-pink);
+  }
+  50% {
+    text-shadow: 
+      2px 0 var(--color-neon-cyan),
+      -2px 0 var(--color-neon-pink);
+  }
+  75% {
+    text-shadow: 
+      -1px 0 var(--color-neon-cyan),
+      1px 0 var(--color-neon-pink);
+  }
+}

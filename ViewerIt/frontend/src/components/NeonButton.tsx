@@ -2,7 +2,7 @@
  * NeonButton Component - Glowing cyberpunk button
  */
 import { motion } from 'framer-motion';
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface NeonButtonProps {
   children: ReactNode;

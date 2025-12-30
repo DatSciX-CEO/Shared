@@ -1,9 +1,12 @@
 /**
  * AIChat Component - Ollama-powered AI assistant chat interface
+ * Enhanced with ModelSelector integration and status feedback
  */
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, User, Sparkles, AlertCircle } from 'lucide-react';
+import { Send, Bot, User, Sparkles, AlertCircle, Zap } from 'lucide-react';
+import { ModelSelector } from './ModelSelector';
+import { type OllamaModel, type OllamaStatus } from '../hooks/useApi';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -12,18 +15,24 @@ interface Message {
 }
 
 interface AIChatProps {
-  models: Array<{ name: string; family?: string }>;
+  models: OllamaModel[];
+  modelStatus: OllamaStatus;
   selectedModel: string;
   onModelChange: (model: string) => void;
+  onRefreshModels: () => void;
+  isRefreshingModels?: boolean;
   onSendMessage: (message: string) => Promise<string | null>;
   isLoading?: boolean;
   disabled?: boolean;
 }
 
 export function AIChat({ 
-  models, 
+  models,
+  modelStatus,
   selectedModel, 
-  onModelChange, 
+  onModelChange,
+  onRefreshModels,
+  isRefreshingModels = false,
   onSendMessage,
   isLoading = false,
   disabled = false
@@ -71,45 +80,113 @@ export function AIChat({
     }
   };
 
+  // Check if AI is ready (model selected and online)
+  const isAIReady = modelStatus.online && selectedModel && !disabled;
+
   return (
     <div className="flex flex-col h-full">
-      {/* Model Selector */}
+      {/* Model Selector Header */}
       <div className="p-4 border-b border-[#2a2a3a]">
-        <label 
-          className="block text-xs uppercase tracking-wider text-[#888899] mb-2"
-          style={{ fontFamily: 'Orbitron, monospace' }}
-        >
-          AI Model
-        </label>
-        <select
-          value={selectedModel}
-          onChange={(e) => onModelChange(e.target.value)}
+        <ModelSelector
+          models={models}
+          status={modelStatus}
+          selectedModel={selectedModel}
+          onModelChange={onModelChange}
+          onRefresh={onRefreshModels}
+          isRefreshing={isRefreshingModels}
           disabled={disabled}
-          className="w-full px-3 py-2 rounded-lg bg-[#12121a] border border-[#2a2a3a] text-[#e0e0e0] focus:border-[#00f5ff] focus:outline-none transition-colors"
-          style={{ fontFamily: 'JetBrains Mono, monospace' }}
-        >
-          {models.map(model => (
-            <option key={model.name} value={model.name}>
-              {model.name} {model.family ? `(${model.family})` : ''}
-            </option>
-          ))}
-        </select>
+        />
+        
+        {/* AI Ready Indicator */}
+        {isAIReady && (
+          <motion.div 
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 flex items-center gap-2 text-xs text-[#39ff14]"
+            style={{ fontFamily: 'JetBrains Mono, monospace' }}
+          >
+            <motion.div
+              animate={{ 
+                boxShadow: [
+                  '0 0 5px rgba(57, 255, 20, 0.5)',
+                  '0 0 15px rgba(57, 255, 20, 0.8)',
+                  '0 0 5px rgba(57, 255, 20, 0.5)',
+                ]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="w-2 h-2 rounded-full bg-[#39ff14]"
+            />
+            <Zap size={12} />
+            <span>AI Ready - {selectedModel.split(':')[0]}</span>
+          </motion.div>
+        )}
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Sparkles size={40} className="text-[#ff00ff] mb-4" />
-            <p 
-              className="text-lg text-[#888899]"
-              style={{ fontFamily: 'Rajdhani, sans-serif' }}
-            >
-              {disabled 
-                ? 'Run a comparison first to enable AI analysis'
-                : 'Ask me about your data comparison results...'
-              }
-            </p>
+          <div className="flex flex-col items-center justify-center h-full text-center px-8">
+            {!modelStatus.online ? (
+              <>
+                <AlertCircle size={40} className="text-yellow-500 mb-4" />
+                <p 
+                  className="text-lg text-yellow-400 mb-2"
+                  style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                >
+                  Ollama is Offline
+                </p>
+                <p 
+                  className="text-sm text-[#888899] mb-4 max-w-md"
+                  style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                >
+                  Start Ollama to enable AI-powered analysis of your comparison results.
+                </p>
+                {modelStatus.setup_hint && (
+                  <div className="p-3 rounded-lg bg-[#1a1a2e] border border-[#2a2a3a]">
+                    <code 
+                      className="text-xs text-[#00f5ff]"
+                      style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                    >
+                      {modelStatus.setup_hint}
+                    </code>
+                  </div>
+                )}
+              </>
+            ) : disabled ? (
+              <>
+                <Sparkles size={40} className="text-[#888899] mb-4" />
+                <p 
+                  className="text-lg text-[#888899]"
+                  style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                >
+                  Run a comparison first to enable AI analysis
+                </p>
+              </>
+            ) : (
+              <>
+                <motion.div
+                  animate={{ 
+                    scale: [1, 1.1, 1],
+                    rotate: [0, 5, -5, 0],
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <Sparkles size={40} className="text-[#ff00ff]" />
+                </motion.div>
+                <p 
+                  className="text-lg text-[#888899] mt-4"
+                  style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                >
+                  Ask me about your data comparison results...
+                </p>
+                <p 
+                  className="text-xs text-[#555566] mt-2 max-w-sm"
+                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                >
+                  Examples: "What are the main differences?" • "Why are these rows missing?" • "Suggest data fixes"
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -190,28 +267,50 @@ export function AIChat({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
-            disabled={disabled || isLoading}
-            placeholder={disabled ? 'Run comparison first...' : 'Ask about the data...'}
-            className="flex-1 px-4 py-3 rounded-lg bg-[#12121a] border border-[#2a2a3a] text-[#e0e0e0] placeholder-[#555566] focus:border-[#00f5ff] focus:outline-none resize-none transition-colors disabled:opacity-50"
+            disabled={!isAIReady || isLoading}
+            placeholder={
+              !modelStatus.online 
+                ? 'Ollama offline...' 
+                : disabled 
+                  ? 'Run comparison first...' 
+                  : 'Ask about the data...'
+            }
+            className={`flex-1 px-4 py-3 rounded-lg bg-[#12121a] border text-[#e0e0e0] placeholder-[#555566] focus:outline-none resize-none transition-all duration-300 disabled:opacity-50 ${
+              isAIReady 
+                ? 'border-[#2a2a3a] focus:border-[#00f5ff] focus:shadow-[0_0_10px_rgba(0,245,255,0.2)]' 
+                : 'border-[#2a2a3a]'
+            }`}
             style={{ fontFamily: 'Rajdhani, sans-serif' }}
             rows={2}
           />
           <motion.button
             onClick={handleSend}
-            disabled={!input.trim() || isLoading || disabled}
+            disabled={!input.trim() || isLoading || !isAIReady}
             className={`
               px-4 rounded-lg transition-all duration-300
-              ${!input.trim() || isLoading || disabled
+              ${!input.trim() || isLoading || !isAIReady
                 ? 'bg-[#2a2a3a] text-[#555566] cursor-not-allowed'
                 : 'bg-gradient-to-r from-[#00f5ff] to-[#ff00ff] text-[#0a0a0f] hover:shadow-[0_0_20px_rgba(0,245,255,0.5)]'
               }
             `}
-            whileHover={input.trim() && !isLoading && !disabled ? { scale: 1.05 } : {}}
-            whileTap={input.trim() && !isLoading && !disabled ? { scale: 0.95 } : {}}
+            whileHover={input.trim() && !isLoading && isAIReady ? { scale: 1.05 } : {}}
+            whileTap={input.trim() && !isLoading && isAIReady ? { scale: 0.95 } : {}}
           >
             <Send size={20} />
           </motion.button>
         </div>
+        
+        {/* Status hint when offline */}
+        {!modelStatus.online && (
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-[10px] text-yellow-500/70 mt-2 text-center"
+            style={{ fontFamily: 'JetBrains Mono, monospace' }}
+          >
+            Start Ollama service to enable AI chat
+          </motion.p>
+        )}
       </div>
     </div>
   );

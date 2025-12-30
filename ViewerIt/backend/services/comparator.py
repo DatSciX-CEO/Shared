@@ -2,7 +2,7 @@
 Data Comparator Service - Core comparison logic using datacompy.
 """
 import pandas as pd
-import datacompy
+from datacompy.core import Compare
 from typing import Optional
 import json
 
@@ -16,7 +16,7 @@ class DataComparator:
         self.df2 = df2
         self.df1_name = df1_name
         self.df2_name = df2_name
-        self._comparison: Optional[datacompy.Compare] = None
+        self._comparison: Optional[Compare] = None
     
     def compare(self, join_columns: list[str], 
                 ignore_columns: Optional[list[str]] = None,
@@ -39,7 +39,7 @@ class DataComparator:
             df1_compare = df1_compare.drop(columns=[c for c in ignore_columns if c in df1_compare.columns], errors='ignore')
             df2_compare = df2_compare.drop(columns=[c for c in ignore_columns if c in df2_compare.columns], errors='ignore')
         
-        self._comparison = datacompy.Compare(
+        self._comparison = Compare(
             df1_compare,
             df2_compare,
             join_columns=join_columns,
@@ -67,25 +67,36 @@ class DataComparator:
         rows_only_in_df1 = comp.df1_unq_rows.to_dict(orient='records') if len(comp.df1_unq_rows) > 0 else []
         rows_only_in_df2 = comp.df2_unq_rows.to_dict(orient='records') if len(comp.df2_unq_rows) > 0 else []
         
+        # Build column stats lookup from the new list-based format
+        column_stats_lookup = {}
+        if hasattr(comp, 'column_stats') and isinstance(comp.column_stats, list):
+            for stat in comp.column_stats:
+                column_stats_lookup[stat['column']] = stat
+        
         # Get column-level mismatch details
         column_mismatches = []
         for col in comp.intersect_columns():
             if col not in comp.join_columns:
-                mismatch_count = comp.column_stats.get(col, {}).get('unequal_cnt', 0) if hasattr(comp, 'column_stats') else 0
+                mismatch_count = 0
                 
-                # Calculate mismatch from the comparison directly
-                try:
-                    if col in comp.intersect_rows.columns:
-                        # Check for column mismatch
-                        if f"{col}_df1" in comp.intersect_rows.columns and f"{col}_df2" in comp.intersect_rows.columns:
-                            mask = comp.intersect_rows[f"{col}_df1"] != comp.intersect_rows[f"{col}_df2"]
-                            mismatch_count = mask.sum()
-                except Exception:
-                    mismatch_count = 0
+                # Get mismatch count from column_stats lookup
+                if col in column_stats_lookup:
+                    mismatch_count = int(column_stats_lookup[col].get('unequal_cnt', 0))
+                else:
+                    # Fallback: Calculate mismatch from the comparison directly
+                    try:
+                        if hasattr(comp, 'intersect_rows') and comp.intersect_rows is not None:
+                            col_df1 = f"{col}_df1"
+                            col_df2 = f"{col}_df2"
+                            if col_df1 in comp.intersect_rows.columns and col_df2 in comp.intersect_rows.columns:
+                                mask = comp.intersect_rows[col_df1] != comp.intersect_rows[col_df2]
+                                mismatch_count = int(mask.sum())
+                    except Exception:
+                        mismatch_count = 0
                 
                 column_mismatches.append({
                     "column": col,
-                    "mismatch_count": int(mismatch_count),
+                    "mismatch_count": mismatch_count,
                 })
         
         # Get mismatched columns with sample differences
@@ -94,8 +105,13 @@ class DataComparator:
             if col_info["mismatch_count"] > 0:
                 mismatched_cols_with_samples.append(col_info["column"])
         
+        # Get common row count safely
+        common_rows = 0
+        if hasattr(comp, 'intersect_rows') and comp.intersect_rows is not None:
+            common_rows = len(comp.intersect_rows)
+        
         return {
-            "matches": comp.matches(),
+            "matches": bool(comp.matches()),
             "summary": {
                 "df1_name": self.df1_name,
                 "df2_name": self.df2_name,
@@ -103,7 +119,7 @@ class DataComparator:
                 "df2_rows": len(self.df2),
                 "df1_columns": len(self.df1.columns),
                 "df2_columns": len(self.df2.columns),
-                "common_rows": len(comp.intersect_rows) if hasattr(comp, 'intersect_rows') else 0,
+                "common_rows": common_rows,
                 "common_columns": len(common_columns),
             },
             "columns": {

@@ -2,7 +2,7 @@
  * CyberCard Component - Styled container with neon accents
  */
 import { motion } from 'framer-motion';
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 interface CyberCardProps {
   children: ReactNode;
