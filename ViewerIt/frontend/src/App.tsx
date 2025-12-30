@@ -24,7 +24,7 @@ import {
   ComparisonStats,
   StreamlitEmbed 
 } from './components';
-import { useApi, type ComparisonResult, type OllamaModel, type FileInfo } from './hooks/useApi';
+import { useApi, type ComparisonResult, type MultiComparisonResult, type OllamaModel, type FileInfo } from './hooks/useApi';
 
 type Tab = 'upload' | 'compare' | 'visualize' | 'ai';
 
@@ -36,6 +36,8 @@ function App() {
   const [fileInfos, setFileInfos] = useState<Record<string, FileInfo>>({});
   const [selectedJoinColumn, setSelectedJoinColumn] = useState<string>('');
   const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
+  const [multiComparisonResult, setMultiComparisonResult] = useState<MultiComparisonResult | null>(null);
+  const [selectedComparisonIndex, setSelectedComparisonIndex] = useState(0);
   const [models, setModels] = useState<OllamaModel[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [showStreamlit, setShowStreamlit] = useState(false);
@@ -94,13 +96,14 @@ function App() {
     
     const result = await api.compareFiles(
       sessionId,
-      uploadedFiles[0],
-      uploadedFiles[1],
+      uploadedFiles,
       [selectedJoinColumn]
     );
     
-    if (result) {
-      setComparisonResult(result);
+    if (result && result.comparisons.length > 0) {
+      setMultiComparisonResult(result);
+      setComparisonResult(result.comparisons[0]);
+      setSelectedComparisonIndex(0);
     }
   };
 
@@ -321,6 +324,27 @@ function App() {
                       </div>
                     </div>
                   </CyberCard>
+
+                  {/* Multiple Comparison Selector */}
+                  {multiComparisonResult && multiComparisonResult.comparisons.length > 1 && (
+                     <CyberCard title="Select Comparison Pair" accent="yellow">
+                        <div className="flex gap-2 flex-wrap">
+                          {multiComparisonResult.comparisons.map((comp, idx) => (
+                            <button
+                               key={idx}
+                               onClick={() => {
+                                 setComparisonResult(comp);
+                                 setSelectedComparisonIndex(idx);
+                               }}
+                               className={`px-4 py-2 rounded border transition-all duration-300 ${selectedComparisonIndex === idx ? 'bg-[#00f5ff] text-[#0a0a0f] border-[#00f5ff] font-bold' : 'bg-transparent text-[#e0e0e0] border-[#2a2a3a] hover:border-[#00f5ff]'}`}
+                               style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                            >
+                               {comp.file1} vs {comp.file2}
+                            </button>
+                          ))}
+                        </div>
+                     </CyberCard>
+                  )}
 
                   {/* Results */}
                   {comparisonResult && (

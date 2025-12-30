@@ -30,8 +30,7 @@ app.add_middleware(
 
 class CompareRequest(BaseModel):
     session_id: str
-    file1: str
-    file2: str
+    files: list[str]
     join_columns: list[str]
     ignore_columns: Optional[list[str]] = None
     abs_tol: float = 0.0001
@@ -142,23 +141,35 @@ async def cleanup_session(session_id: str):
 
 @app.post("/compare")
 async def compare_files(request: CompareRequest):
-    """Compare two files and return detailed results."""
+    """Compare two or more files and return detailed results."""
     try:
-        df1 = FileHandler.load_dataframe(request.session_id, request.file1)
-        df2 = FileHandler.load_dataframe(request.session_id, request.file2)
+        if len(request.files) < 2:
+            raise HTTPException(status_code=400, detail="At least two files are required for comparison")
+
+        base_file = request.files[0]
+        df_base = FileHandler.load_dataframe(request.session_id, base_file)
         
-        comparator = DataComparator(df1, df2, request.file1, request.file2)
-        results = comparator.compare(
-            join_columns=request.join_columns,
-            ignore_columns=request.ignore_columns,
-            abs_tol=request.abs_tol,
-            rel_tol=request.rel_tol,
-        )
+        comparisons = []
         
-        # Add statistics
-        results["statistics"] = comparator.get_statistics()
+        for other_file in request.files[1:]:
+            df_other = FileHandler.load_dataframe(request.session_id, other_file)
+            
+            comparator = DataComparator(df_base, df_other, base_file, other_file)
+            result = comparator.compare(
+                join_columns=request.join_columns,
+                ignore_columns=request.ignore_columns,
+                abs_tol=request.abs_tol,
+                rel_tol=request.rel_tol,
+            )
+            
+            # Add statistics
+            result["statistics"] = comparator.get_statistics()
+            result["file1"] = base_file
+            result["file2"] = other_file
+            
+            comparisons.append(result)
         
-        return results
+        return {"comparisons": comparisons}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
