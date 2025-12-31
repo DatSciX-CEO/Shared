@@ -1,13 +1,13 @@
 """
 ViewerIt Streamlit Visualization Dashboard
-Embedded visualization for data comparison results
+Enhanced with multi-file comparison, schema analysis, and quality checking
 """
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from pathlib import Path
-import sys
 
 # Configure Streamlit for embedding
 st.set_page_config(
@@ -134,7 +134,6 @@ st.markdown("""
 
 def load_data(session_id: str, filename: str) -> pd.DataFrame:
     """Load data from the backend uploads directory."""
-    # Path to backend uploads
     backend_path = Path(__file__).parent.parent / "backend" / "uploads" / session_id / filename
     
     if not backend_path.exists():
@@ -152,6 +151,8 @@ def load_data(session_id: str, filename: str) -> pd.DataFrame:
             return pd.read_parquet(backend_path)
         elif ext == ".json":
             return pd.read_json(backend_path)
+        elif ext == ".tsv":
+            return pd.read_csv(backend_path, sep='\t')
         else:
             # Try CSV with different delimiters
             for delimiter in ["\x14", "|", "\t", ","]:
@@ -178,211 +179,434 @@ def create_plotly_theme():
     )
 
 
+def render_overview_tab(dataframes: dict[str, pd.DataFrame]):
+    """Render dataset overview tab."""
+    st.subheader("Dataset Overview")
+    
+    cols = st.columns(len(dataframes))
+    
+    for idx, (filename, df) in enumerate(dataframes.items()):
+        with cols[idx]:
+            st.markdown(f"### {filename}")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Rows", f"{len(df):,}")
+            c2.metric("Columns", len(df.columns))
+            c3.metric("Memory", f"{df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
+            
+            st.markdown("**Data Types:**")
+            dtype_counts = df.dtypes.value_counts()
+            fig = px.pie(
+                values=dtype_counts.values, 
+                names=[str(t) for t in dtype_counts.index],
+                hole=0.4,
+            )
+            fig.update_layout(**create_plotly_theme(), showlegend=True, height=200)
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # Column comparison
+    st.subheader("Column Comparison Across Files")
+    
+    all_cols = set()
+    col_presence = {}
+    for filename, df in dataframes.items():
+        cols_set = set(df.columns)
+        all_cols.update(cols_set)
+        col_presence[filename] = cols_set
+    
+    # Build presence matrix
+    presence_data = []
+    for col in sorted(all_cols):
+        row = {"Column": col}
+        for filename in dataframes.keys():
+            row[filename] = "✓" if col in col_presence[filename] else "✗"
+        presence_data.append(row)
+    
+    presence_df = pd.DataFrame(presence_data)
+    st.dataframe(presence_df, use_container_width=True, hide_index=True)
+
+
+def render_column_analysis_tab(dataframes: dict[str, pd.DataFrame]):
+    """Render column-by-column analysis tab."""
+    st.subheader("Column-by-Column Analysis")
+    
+    # Find common columns
+    common_cols = set(list(dataframes.values())[0].columns)
+    for df in dataframes.values():
+        common_cols &= set(df.columns)
+    
+    common_cols = sorted(list(common_cols))
+    
+    if common_cols:
+        selected_col = st.selectbox("Select a column to analyze:", common_cols)
+        
+        if selected_col:
+            cols = st.columns(len(dataframes))
+            
+            for idx, (filename, df) in enumerate(dataframes.items()):
+                with cols[idx]:
+                    st.markdown(f"**{filename}**")
+                    st.write(f"Unique values: {df[selected_col].nunique()}")
+                    st.write(f"Null values: {df[selected_col].isnull().sum()}")
+                    
+                    if df[selected_col].dtype in ['int64', 'float64']:
+                        st.dataframe(df[selected_col].describe())
+                    else:
+                        st.write("Top values:")
+                        st.dataframe(df[selected_col].value_counts().head(10))
+    else:
+        st.warning("No common columns found between the datasets.")
+
+
+def render_distribution_tab(dataframes: dict[str, pd.DataFrame]):
+    """Render value distribution tab."""
+    st.subheader("Value Distributions")
+    
+    # Find common numeric columns
+    common_numeric = None
+    for df in dataframes.values():
+        numeric_cols = set(df.select_dtypes(include=['number']).columns)
+        if common_numeric is None:
+            common_numeric = numeric_cols
+        else:
+            common_numeric &= numeric_cols
+    
+    common_numeric = sorted(list(common_numeric)) if common_numeric else []
+    
+    if common_numeric:
+        dist_col = st.selectbox("Select numeric column:", common_numeric)
+        
+        if dist_col:
+            # Histogram overlay
+            fig = go.Figure()
+            colors = ["#00f5ff", "#ff00ff", "#f0ff00", "#39ff14", "#ff6600"]
+            
+            for idx, (filename, df) in enumerate(dataframes.items()):
+                color = colors[idx % len(colors)]
+                fig.add_trace(go.Histogram(
+                    x=df[dist_col], 
+                    name=filename, 
+                    opacity=0.6,
+                    marker_color=color
+                ))
+            
+            fig.update_layout(
+                barmode='overlay',
+                title=f"Distribution of {dist_col}",
+                **create_plotly_theme()
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Box plot comparison
+            fig2 = go.Figure()
+            for idx, (filename, df) in enumerate(dataframes.items()):
+                color = colors[idx % len(colors)]
+                fig2.add_trace(go.Box(
+                    y=df[dist_col], 
+                    name=filename, 
+                    marker_color=color
+                ))
+            
+            fig2.update_layout(
+                title=f"Box Plot: {dist_col}",
+                **create_plotly_theme()
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No common numeric columns found for distribution analysis.")
+
+
+def render_differences_tab(dataframes: dict[str, pd.DataFrame]):
+    """Render data differences tab."""
+    st.subheader("Data Differences")
+    
+    # Find common columns
+    common_cols = set(list(dataframes.values())[0].columns)
+    for df in dataframes.values():
+        common_cols &= set(df.columns)
+    
+    if len(common_cols) == 0:
+        st.warning("No common columns to compare.")
+        return
+    
+    # Null value comparison
+    st.markdown("### Null Value Comparison")
+    null_data = []
+    for col in common_cols:
+        row = {"Column": col}
+        for filename, df in dataframes.items():
+            row[f"Nulls in {filename}"] = df[col].isnull().sum()
+        null_data.append(row)
+    
+    null_df = pd.DataFrame(null_data)
+    
+    # Find columns with different null counts
+    diff_cols = []
+    for _, row in null_df.iterrows():
+        null_counts = [v for k, v in row.items() if k.startswith("Nulls")]
+        if len(set(null_counts)) > 1:
+            diff_cols.append(row["Column"])
+    
+    if diff_cols:
+        filtered_null_df = null_df[null_df["Column"].isin(diff_cols)]
+        
+        # Bar chart for null differences
+        fig = go.Figure()
+        colors = ["#00f5ff", "#ff00ff", "#f0ff00", "#39ff14", "#ff6600"]
+        
+        for idx, filename in enumerate(dataframes.keys()):
+            col_name = f"Nulls in {filename}"
+            fig.add_trace(go.Bar(
+                x=filtered_null_df["Column"],
+                y=filtered_null_df[col_name],
+                name=filename,
+                marker_color=colors[idx % len(colors)]
+            ))
+        
+        fig.update_layout(
+            barmode="group",
+            title="Columns with Different Null Counts",
+            **create_plotly_theme()
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.success("No difference in null value counts between datasets.")
+    
+    # Summary statistics
+    st.markdown("### Summary Statistics")
+    summary_data = {"Metric": ["Total Rows", "Total Columns", "Common Columns"]}
+    for filename, df in dataframes.items():
+        summary_data[filename] = [len(df), len(df.columns), len(common_cols)]
+    
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+
+
+def render_venn_tab(dataframes: dict[str, pd.DataFrame], join_col: str):
+    """Render Venn diagram for record overlap (2-3 files only)."""
+    st.subheader("Record Overlap (Venn Diagram)")
+    
+    if len(dataframes) > 3:
+        st.warning("Venn diagram is only available for 2-3 files.")
+        return
+    
+    if not join_col:
+        st.warning("Select a join column to see record overlap.")
+        return
+    
+    # Get unique keys from each file
+    keys_by_file = {}
+    for filename, df in dataframes.items():
+        if join_col in df.columns:
+            keys_by_file[filename] = set(df[join_col].dropna().astype(str))
+    
+    if len(keys_by_file) < 2:
+        st.warning(f"Column '{join_col}' not found in all files.")
+        return
+    
+    filenames = list(keys_by_file.keys())
+    
+    if len(filenames) == 2:
+        # Two-set Venn
+        set_a = keys_by_file[filenames[0]]
+        set_b = keys_by_file[filenames[1]]
+        
+        only_a = len(set_a - set_b)
+        only_b = len(set_b - set_a)
+        both = len(set_a & set_b)
+        
+        fig = go.Figure()
+        
+        # Create circles using scatter traces
+        import numpy as np
+        theta = np.linspace(0, 2*np.pi, 100)
+        
+        # Circle A
+        x_a = 0.7 * np.cos(theta) - 0.3
+        y_a = 0.7 * np.sin(theta)
+        fig.add_trace(go.Scatter(x=x_a, y=y_a, mode='lines', 
+                                 line=dict(color='#00f5ff', width=3),
+                                 fill='toself', fillcolor='rgba(0,245,255,0.2)',
+                                 name=filenames[0]))
+        
+        # Circle B
+        x_b = 0.7 * np.cos(theta) + 0.3
+        y_b = 0.7 * np.sin(theta)
+        fig.add_trace(go.Scatter(x=x_b, y=y_b, mode='lines',
+                                 line=dict(color='#ff00ff', width=3),
+                                 fill='toself', fillcolor='rgba(255,0,255,0.2)',
+                                 name=filenames[1]))
+        
+        # Add annotations
+        fig.add_annotation(x=-0.6, y=0, text=f"{only_a}", font=dict(size=20, color='#00f5ff'))
+        fig.add_annotation(x=0, y=0, text=f"{both}", font=dict(size=20, color='#39ff14'))
+        fig.add_annotation(x=0.6, y=0, text=f"{only_b}", font=dict(size=20, color='#ff00ff'))
+        
+        fig.update_layout(
+            showlegend=True,
+            **create_plotly_theme(),
+            xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+            yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, scaleanchor='x'),
+            title="Record Overlap"
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Show numbers
+        col1, col2, col3 = st.columns(3)
+        col1.metric(f"Only in {filenames[0]}", only_a)
+        col2.metric("In Both", both)
+        col3.metric(f"Only in {filenames[1]}", only_b)
+    
+    else:  # 3 files
+        st.info("3-file Venn diagram coming soon. Showing overlap statistics:")
+        
+        sets = [keys_by_file[f] for f in filenames]
+        
+        all_three = sets[0] & sets[1] & sets[2]
+        ab_only = (sets[0] & sets[1]) - sets[2]
+        ac_only = (sets[0] & sets[2]) - sets[1]
+        bc_only = (sets[1] & sets[2]) - sets[0]
+        a_only = sets[0] - sets[1] - sets[2]
+        b_only = sets[1] - sets[0] - sets[2]
+        c_only = sets[2] - sets[0] - sets[1]
+        
+        overlap_data = {
+            "Overlap": [
+                "All three files",
+                f"{filenames[0]} & {filenames[1]} only",
+                f"{filenames[0]} & {filenames[2]} only",
+                f"{filenames[1]} & {filenames[2]} only",
+                f"{filenames[0]} only",
+                f"{filenames[1]} only",
+                f"{filenames[2]} only",
+            ],
+            "Count": [
+                len(all_three), len(ab_only), len(ac_only), len(bc_only),
+                len(a_only), len(b_only), len(c_only)
+            ]
+        }
+        
+        st.dataframe(pd.DataFrame(overlap_data), use_container_width=True, hide_index=True)
+
+
+def render_quality_tab(dataframes: dict[str, pd.DataFrame]):
+    """Render data quality overview tab."""
+    st.subheader("Data Quality Overview")
+    
+    quality_data = []
+    
+    for filename, df in dataframes.items():
+        total_cells = len(df) * len(df.columns)
+        null_cells = df.isnull().sum().sum()
+        completeness = (1 - null_cells / total_cells) * 100 if total_cells > 0 else 100
+        duplicates = df.duplicated().sum()
+        
+        quality_data.append({
+            "File": filename,
+            "Rows": len(df),
+            "Columns": len(df.columns),
+            "Completeness %": round(completeness, 2),
+            "Duplicate Rows": duplicates,
+            "Memory (MB)": round(df.memory_usage(deep=True).sum() / 1024 / 1024, 2),
+        })
+    
+    quality_df = pd.DataFrame(quality_data)
+    st.dataframe(quality_df, use_container_width=True, hide_index=True)
+    
+    # Completeness comparison chart
+    fig = px.bar(
+        quality_df,
+        x="File",
+        y="Completeness %",
+        color="File",
+        color_discrete_sequence=["#00f5ff", "#ff00ff", "#f0ff00", "#39ff14", "#ff6600"],
+        title="Data Completeness by File"
+    )
+    fig.update_layout(**create_plotly_theme())
+    st.plotly_chart(fig, use_container_width=True)
+
+
 def main():
     # Get query parameters
     query_params = st.query_params
     session_id = query_params.get("session_id", "")
-    file1 = query_params.get("file1", "")
-    file2 = query_params.get("file2", "")
+    
+    # Support multiple files
+    file_params = []
+    for key in query_params:
+        if key.startswith("file"):
+            file_params.append(query_params.get(key))
+    
+    # Fallback to file1, file2 format
+    if not file_params:
+        file1 = query_params.get("file1", "")
+        file2 = query_params.get("file2", "")
+        if file1:
+            file_params.append(file1)
+        if file2:
+            file_params.append(file2)
     
     st.title("📊 Data Visualization Dashboard")
     
-    if not session_id or not file1 or not file2:
+    if not session_id or not file_params:
         st.warning("No data loaded. Please run a comparison from the main application.")
         st.info("This dashboard is designed to be embedded in the ViewerIt React application.")
         return
     
-    # Load dataframes
+    # Load all dataframes
+    dataframes = {}
     with st.spinner("Loading data..."):
-        df1 = load_data(session_id, file1)
-        df2 = load_data(session_id, file2)
+        for filename in file_params:
+            if filename:
+                df = load_data(session_id, filename)
+                if not df.empty:
+                    dataframes[filename] = df
     
-    if df1.empty or df2.empty:
-        st.error("Could not load one or both files.")
+    if len(dataframes) == 0:
+        st.error("Could not load any files.")
         return
     
+    if len(dataframes) == 1:
+        st.info(f"Loaded 1 file: {list(dataframes.keys())[0]}")
+    else:
+        st.success(f"Loaded {len(dataframes)} files for comparison")
+    
+    # Find common columns for join selection
+    common_cols = set(list(dataframes.values())[0].columns) if dataframes else set()
+    for df in dataframes.values():
+        common_cols &= set(df.columns)
+    
+    # Join column selector in sidebar
+    join_col = ""
+    if common_cols:
+        join_col = st.selectbox("Join Column (for overlap analysis):", [""] + sorted(list(common_cols)))
+    
     # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "🔍 Column Analysis", "📊 Distribution", "🎯 Differences"])
+    tab_names = ["📈 Overview", "🔍 Column Analysis", "📊 Distribution", "🎯 Differences", "📉 Quality"]
+    if len(dataframes) <= 3 and join_col:
+        tab_names.append("🔮 Venn Diagram")
     
-    with tab1:
-        st.subheader("Dataset Overview")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown(f"### {file1}")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Rows", f"{len(df1):,}")
-            c2.metric("Columns", len(df1.columns))
-            c3.metric("Memory", f"{df1.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
-            
-            st.markdown("**Data Types:**")
-            dtype_counts = df1.dtypes.value_counts()
-            fig = px.pie(
-                values=dtype_counts.values, 
-                names=[str(t) for t in dtype_counts.index],
-                hole=0.4,
-            )
-            fig.update_layout(**create_plotly_theme())
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            st.markdown(f"### {file2}")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Rows", f"{len(df2):,}")
-            c2.metric("Columns", len(df2.columns))
-            c3.metric("Memory", f"{df2.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
-            
-            st.markdown("**Data Types:**")
-            dtype_counts = df2.dtypes.value_counts()
-            fig = px.pie(
-                values=dtype_counts.values, 
-                names=[str(t) for t in dtype_counts.index],
-                hole=0.4,
-            )
-            fig.update_layout(**create_plotly_theme())
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Column comparison
-        st.subheader("Column Comparison")
-        cols1 = set(df1.columns)
-        cols2 = set(df2.columns)
-        common = cols1 & cols2
-        only_in_1 = cols1 - cols2
-        only_in_2 = cols2 - cols1
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Common Columns", len(common))
-        c2.metric(f"Only in {file1}", len(only_in_1))
-        c3.metric(f"Only in {file2}", len(only_in_2))
-        
-        if only_in_1:
-            with st.expander(f"Columns only in {file1}"):
-                st.write(", ".join(sorted(only_in_1)))
-        
-        if only_in_2:
-            with st.expander(f"Columns only in {file2}"):
-                st.write(", ".join(sorted(only_in_2)))
+    tabs = st.tabs(tab_names)
     
-    with tab2:
-        st.subheader("Column-by-Column Analysis")
-        
-        # Select column
-        common_cols = sorted(list(cols1 & cols2))
-        if common_cols:
-            selected_col = st.selectbox("Select a column to analyze:", common_cols)
-            
-            if selected_col:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"**{file1}**")
-                    st.write(f"Unique values: {df1[selected_col].nunique()}")
-                    st.write(f"Null values: {df1[selected_col].isnull().sum()}")
-                    
-                    if df1[selected_col].dtype in ['int64', 'float64']:
-                        st.dataframe(df1[selected_col].describe())
-                    else:
-                        st.write("Top values:")
-                        st.dataframe(df1[selected_col].value_counts().head(10))
-                
-                with col2:
-                    st.markdown(f"**{file2}**")
-                    st.write(f"Unique values: {df2[selected_col].nunique()}")
-                    st.write(f"Null values: {df2[selected_col].isnull().sum()}")
-                    
-                    if df2[selected_col].dtype in ['int64', 'float64']:
-                        st.dataframe(df2[selected_col].describe())
-                    else:
-                        st.write("Top values:")
-                        st.dataframe(df2[selected_col].value_counts().head(10))
-        else:
-            st.warning("No common columns found between the datasets.")
+    with tabs[0]:
+        render_overview_tab(dataframes)
     
-    with tab3:
-        st.subheader("Value Distributions")
-        
-        numeric_cols_1 = df1.select_dtypes(include=['number']).columns.tolist()
-        numeric_cols_2 = df2.select_dtypes(include=['number']).columns.tolist()
-        common_numeric = list(set(numeric_cols_1) & set(numeric_cols_2))
-        
-        if common_numeric:
-            dist_col = st.selectbox("Select numeric column:", common_numeric)
-            
-            if dist_col:
-                fig = go.Figure()
-                fig.add_trace(go.Histogram(
-                    x=df1[dist_col], 
-                    name=file1, 
-                    opacity=0.7,
-                    marker_color="#00f5ff"
-                ))
-                fig.add_trace(go.Histogram(
-                    x=df2[dist_col], 
-                    name=file2, 
-                    opacity=0.7,
-                    marker_color="#ff00ff"
-                ))
-                fig.update_layout(
-                    barmode='overlay',
-                    title=f"Distribution of {dist_col}",
-                    **create_plotly_theme()
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Box plot
-                fig2 = go.Figure()
-                fig2.add_trace(go.Box(y=df1[dist_col], name=file1, marker_color="#00f5ff"))
-                fig2.add_trace(go.Box(y=df2[dist_col], name=file2, marker_color="#ff00ff"))
-                fig2.update_layout(
-                    title=f"Box Plot: {dist_col}",
-                    **create_plotly_theme()
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info("No common numeric columns found for distribution analysis.")
+    with tabs[1]:
+        render_column_analysis_tab(dataframes)
     
-    with tab4:
-        st.subheader("Data Differences")
-        
-        # Null value comparison
-        st.markdown("### Null Value Comparison")
-        null_data = []
-        for col in common:
-            null_data.append({
-                "Column": col,
-                f"Nulls in {file1}": df1[col].isnull().sum(),
-                f"Nulls in {file2}": df2[col].isnull().sum(),
-                "Difference": abs(df1[col].isnull().sum() - df2[col].isnull().sum())
-            })
-        
-        null_df = pd.DataFrame(null_data)
-        null_df = null_df[null_df["Difference"] > 0].sort_values("Difference", ascending=False)
-        
-        if not null_df.empty:
-            fig = px.bar(
-                null_df.head(20),
-                x="Column",
-                y=[f"Nulls in {file1}", f"Nulls in {file2}"],
-                barmode="group",
-                title="Columns with Different Null Counts"
-            )
-            fig.update_layout(**create_plotly_theme())
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.success("No difference in null value counts between datasets.")
-        
-        # Row count comparison
-        st.markdown("### Summary Statistics")
-        summary_data = {
-            "Metric": ["Total Rows", "Total Columns", "Common Columns", "Unique Columns"],
-            file1: [len(df1), len(df1.columns), len(common), len(only_in_1)],
-            file2: [len(df2), len(df2.columns), len(common), len(only_in_2)],
-        }
-        summary_df = pd.DataFrame(summary_data)
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    with tabs[2]:
+        render_distribution_tab(dataframes)
+    
+    with tabs[3]:
+        render_differences_tab(dataframes)
+    
+    with tabs[4]:
+        render_quality_tab(dataframes)
+    
+    if len(tabs) > 5:
+        with tabs[5]:
+            render_venn_tab(dataframes, join_col)
 
 
 if __name__ == "__main__":
     main()
-

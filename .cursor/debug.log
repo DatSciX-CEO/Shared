@@ -1,0 +1,12 @@
+{"location":"main.tsx:9","message":"main.tsx starting","data":{"rootElement":true},"timestamp":1767132735220,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:15","message":"root element check","data":{"rootExists":true,"rootId":"root"},"timestamp":1767132735221,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:27","message":"createRoot.render called successfully","data":{},"timestamp":1767132735225,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:9","message":"main.tsx starting","data":{"rootElement":true},"timestamp":1767132740919,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:15","message":"root element check","data":{"rootExists":true,"rootId":"root"},"timestamp":1767132740920,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:27","message":"createRoot.render called successfully","data":{},"timestamp":1767132740921,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:9","message":"main.tsx starting","data":{"rootElement":true},"timestamp":1767132751233,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:27","message":"createRoot.render called successfully","data":{},"timestamp":1767132751234,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:15","message":"root element check","data":{"rootExists":true,"rootId":"root"},"timestamp":1767132751233,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:9","message":"main.tsx starting","data":{"rootElement":true},"timestamp":1767132752490,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:15","message":"root element check","data":{"rootExists":true,"rootId":"root"},"timestamp":1767132752491,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"main.tsx:27","message":"createRoot.render called successfully","data":{},"timestamp":1767132752492,"sessionId":"debug-session","hypothesisId":"H2"}

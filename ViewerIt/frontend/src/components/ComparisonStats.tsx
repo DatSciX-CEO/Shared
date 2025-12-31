@@ -74,7 +74,28 @@ function StatCard({ label, value, icon, color, delay = 0 }: StatCardProps) {
 }
 
 export function ComparisonStats({ result }: ComparisonStatsProps) {
-  const { summary, columns, rows, matches } = result;
+  // Defensive destructuring with fallbacks
+  const summary = result?.summary ?? {
+    df1_name: 'File A',
+    df2_name: 'File B',
+    df1_rows: 0,
+    df2_rows: 0,
+    common_rows: 0,
+    common_columns: 0,
+  };
+  const columns = result?.columns ?? {
+    only_in_df1: [],
+    only_in_df2: [],
+    common: [],
+    mismatched: [],
+  };
+  const rows = result?.rows ?? {
+    only_in_df1_count: 0,
+    only_in_df2_count: 0,
+    only_in_df1_sample: [],
+    only_in_df2_sample: [],
+  };
+  const matches = result?.matches ?? false;
 
   return (
     <div className="space-y-6">

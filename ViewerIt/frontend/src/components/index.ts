@@ -7,6 +7,15 @@ export { CyberCard } from './CyberCard';
 export { FileDropzone } from './FileDropzone';
 export { DataTable } from './DataTable';
 export { AIChat } from './AIChat';
+export { ModelSelector } from './ModelSelector';
 export { ComparisonStats } from './ComparisonStats';
-export { StreamlitEmbed } from './StreamlitEmbed';
+export { SchemaViewer } from './SchemaViewer';
+export { QualityDashboard } from './QualityDashboard';
+export { QualityCharts } from './QualityCharts';
+export { MultiFileComparison } from './MultiFileComparison';
+export { AnalyticsDashboard } from './AnalyticsDashboard';
+export { ErrorBoundary } from './ErrorBoundary';
+
+// Chart components
+export { BarChartViz, PieChartViz, LineChartViz } from './charts';
 

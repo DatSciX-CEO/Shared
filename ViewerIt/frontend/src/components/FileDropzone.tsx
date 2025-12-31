@@ -15,7 +15,6 @@ interface FileDropzoneProps {
 
 export function FileDropzone({ 
   onFilesAccepted, 
-  acceptedTypes = ['.csv', '.xlsx', '.xls', '.parquet', '.json', '.dat', '.txt'],
   maxFiles = 10,
   label = 'Drop your data files here'
 }: FileDropzoneProps) {
@@ -53,7 +52,7 @@ export function FileDropzone({
     <div className="space-y-4">
       {/* Dropzone Area */}
       <motion.div
-        {...getRootProps()}
+        {...(getRootProps() as any)}
         className={`
           relative p-8 rounded-lg border-2 border-dashed cursor-pointer
           transition-all duration-300

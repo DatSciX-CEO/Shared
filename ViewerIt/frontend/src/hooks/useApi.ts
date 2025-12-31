@@ -1,5 +1,6 @@
 /**
  * API Hook - Handles all backend communication
+ * Enhanced with multi-file comparison, schema analysis, and quality checking
  */
 import { useState, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
@@ -11,6 +12,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 300000, // 5 minute timeout for large operations
 });
 
 // Types
@@ -18,10 +20,14 @@ export interface FileInfo {
   filename: string;
   session_id: string;
   file_size: number;
+  file_size_mb?: number;
   rows: number;
   columns: number;
   column_names: string[];
   dtypes: Record<string, string>;
+  format?: string;
+  memory_usage_mb?: number;
+  null_counts?: Record<string, number>;
 }
 
 export interface ComparisonResult {
@@ -54,13 +60,294 @@ export interface ComparisonResult {
   }>;
   text_report: string;
   statistics?: Record<string, unknown>;
+  file1?: string;
+  file2?: string;
+}
+
+export interface MultiComparisonResult {
+  comparisons: ComparisonResult[];
+}
+
+export interface MultiFileComparisonResult {
+  summary: {
+    total_unique_records: number;
+    file_count: number;
+    file_names: string[];
+    records_in_all_files: number;
+    records_in_multiple_files: number;
+    records_in_single_file: number;
+    file_record_counts: Record<string, number>;
+    file_exclusive_counts: Record<string, number>;
+    overlap_percentage: number;
+  };
+  records_in_all_files: {
+    count: number;
+    samples: Array<Record<string, unknown>>;
+  };
+  records_in_some_files: {
+    count: number;
+    by_file_count: Record<string, { count: number; samples: Array<Record<string, unknown>> }>;
+    samples: Array<Record<string, unknown>>;
+  };
+  records_in_one_file: {
+    count: number;
+    by_file: Record<string, number>;
+    samples: Array<Record<string, unknown>>;
+  };
+  presence_matrix: {
+    headers: string[];
+    rows: Array<unknown[]>;
+  };
+  value_differences: Record<string, {
+    mismatch_count: number;
+    samples: Array<{ key: string; values: Record<string, unknown> }>;
+  }>;
+  column_analysis: {
+    all_columns: string[];
+    columns_in_all_files: string[];
+    columns_in_some_files: Record<string, string[]>;
+    file_unique_columns: Record<string, string[]>;
+    column_types: Record<string, Record<string, string>>;
+    type_mismatches: Record<string, Record<string, string>>;
+  };
+  venn_data: {
+    file_names: string[];
+    sets: Array<{ sets: string[]; size: number }>;
+  };
+  reconciliation_report?: {
+    summary: Record<string, unknown>;
+    recommendations: Array<{ type: string; message: string; action?: string }>;
+    action_items: unknown[];
+  };
+  warnings?: Array<{
+    type: string;
+    files?: string[];
+    message: string;
+    suggestion?: string;
+  }>;
+}
+
+export interface ChunkedComparisonResult {
+  file1: string;
+  file2: string;
+  file1_keys: number;
+  file2_keys: number;
+  common_keys: number;
+  only_in_file1: number;
+  only_in_file2: number;
+  only_in_file1_sample: string[];
+  only_in_file2_sample: string[];
+  overlap_percentage: number;
+  method: 'chunked';
+  memory_efficient: boolean;
+}
+
+export interface ChunkedFileStats {
+  filename: string;
+  total_rows: number;
+  total_chunks: number;
+  columns: string[];
+  column_count: number;
+  dtypes: Record<string, string>;
+  null_counts: Record<string, number>;
+  null_percentages: Record<string, number>;
+  method: 'chunked';
+}
+
+export interface SchemaAnalysisResult {
+  schemas: Record<string, {
+    columns: Record<string, {
+      dtype: string;
+      nullable: boolean;
+      null_count: number;
+      null_percentage: number;
+      unique_count: number;
+      unique_percentage: number;
+      min?: number;
+      max?: number;
+      mean?: number;
+      avg_length?: number;
+      max_length?: number;
+      sample_values?: unknown[];
+    }>;
+    row_count: number;
+    column_count: number;
+    memory_usage: number;
+  }>;
+  column_alignment: {
+    all_columns: string[];
+    columns_in_all_files: string[];
+    columns_in_some_files: Record<string, string[]>;
+    file_unique_columns: Record<string, string[]>;
+    column_presence_matrix: Record<string, Record<string, boolean>>;
+  };
+  type_compatibility: {
+    column_types: Record<string, {
+      types: Record<string, string>;
+      unique_types: string[];
+      is_compatible: boolean;
+      compatibility_group: string;
+    }>;
+    compatible_columns: string[];
+    incompatible_columns: string[];
+    compatibility_matrix: {
+      columns: string[];
+      files: string[];
+      data: Array<Record<string, unknown>>;
+    };
+  };
+  mapping_suggestions: {
+    suggestions: Array<{
+      file1: string;
+      column1: string;
+      file2: string;
+      column2: string;
+      similarity_score: number;
+      match_reasons: string[];
+    }>;
+    total_suggestions: number;
+  };
+  issues: Array<{
+    type: string;
+    severity: string;
+    column?: string;
+    file?: string;
+    message: string;
+    details?: Record<string, unknown>;
+  }>;
+  summary: {
+    file_count: number;
+    total_unique_columns: number;
+    columns_in_all_files: number;
+    columns_in_some_files: number;
+    schema_compatibility: string;
+    issue_count: { high: number; medium: number; total: number };
+    file_details: Record<string, { columns: number; rows: number }>;
+  };
+}
+
+export interface QualityCheckResult {
+  dataset_name: string;
+  row_count: number;
+  column_count: number;
+  quality_score: {
+    total: number;
+    grade: string;
+    breakdown: {
+      completeness: number;
+      uniqueness: number;
+      validity: number;
+      consistency: number;
+      outliers: number;
+    };
+  };
+  completeness: {
+    total_cells: number;
+    total_nulls: number;
+    overall_completeness: number;
+    column_completeness: Record<string, {
+      null_count: number;
+      null_percentage: number;
+      complete_count: number;
+      is_complete: boolean;
+    }>;
+    empty_columns: string[];
+    high_null_columns: string[];
+    complete_columns: string[];
+  };
+  uniqueness: {
+    duplicate_row_count: number;
+    duplicate_row_percentage: number;
+    duplicate_row_indices_sample: number[];
+    column_uniqueness: Record<string, {
+      unique_count: number;
+      unique_percentage: number;
+      duplicate_count: number;
+      is_unique: boolean;
+      cardinality: string;
+    }>;
+    potential_id_columns: string[];
+    categorical_columns: string[];
+  };
+  validity: Record<string, {
+    dtype: string;
+    format_checks: Record<string, {
+      match_count: number;
+      match_percentage: number;
+      non_matching_samples: string[];
+    }>;
+    issues: Array<{ type: string; count?: number; message: string }>;
+    case_consistency?: { consistent: boolean; pattern: string; distribution?: Record<string, number> };
+  }>;
+  consistency: {
+    checks_performed: number;
+    issues: Array<{ type: string; columns?: string[]; correlation?: number; message: string }>;
+  };
+  outliers: {
+    columns_checked: number;
+    columns_with_outliers: number;
+    column_outliers: Record<string, {
+      method: string;
+      outlier_count: number;
+      outlier_percentage: number;
+      lower_bound: number;
+      upper_bound: number;
+      outlier_values_sample: number[];
+      statistics: { mean: number; std: number; min: number; max: number; Q1: number; Q3: number };
+    }>;
+  };
+  summary: Record<string, unknown>;
+  recommendations: Array<{
+    category: string;
+    priority: string;
+    message: string;
+    columns?: string[];
+    column?: string;
+    action?: string;
+  }>;
+}
+
+export interface MultiQualityResult {
+  individual_results: Record<string, QualityCheckResult>;
+  comparison: {
+    scores: Record<string, number>;
+    best_quality: string;
+    completeness_comparison: Record<string, number>;
+    duplicate_comparison: Record<string, number>;
+  };
+  overall_summary: {
+    dataset_count: number;
+    total_rows: number;
+    average_quality_score: number;
+    average_grade: string;
+  };
 }
 
 export interface OllamaModel {
   name: string;
   size: number;
+  size_human: string;
   family: string;
+  parameter_size: string;
+  quantization: string;
+  format: string;
+  families: string[];
+  is_available: boolean;
+  modified_at?: string;
   error?: string;
+}
+
+export interface OllamaStatus {
+  online: boolean;
+  count: number;
+  recommended: string | null;
+  error?: string;
+  setup_hint?: string;
+}
+
+export interface OllamaModelsResponse {
+  models: OllamaModel[];
+  status: OllamaStatus;
 }
 
 export interface AIResponse {
@@ -86,7 +373,7 @@ export function useApi() {
   };
 
   // File Operations
-  const uploadFiles = useCallback(async (files: File[]): Promise<{ session_id: string; files: string[] } | null> => {
+  const uploadFiles = useCallback(async (files: File[]): Promise<{ session_id: string; files: string[]; errors?: Array<{ file: string; error: string }> } | null> => {
     setLoading(true);
     setError(null);
     try {
@@ -139,23 +426,36 @@ export function useApi() {
     }
   }, []);
 
-  // Comparison Operations
+  const getExcelSheets = useCallback(async (sessionId: string, filename: string): Promise<string[]> => {
+    try {
+      const response = await api.get(`/files/${sessionId}/${filename}/sheets`);
+      return response.data.sheets || [];
+    } catch (err) {
+      return [];
+    }
+  }, []);
+
+  // Pairwise Comparison Operations
   const compareFiles = useCallback(async (
     sessionId: string,
-    file1: string,
-    file2: string,
+    files: string[],
     joinColumns: string[],
-    ignoreColumns?: string[]
-  ): Promise<ComparisonResult | null> => {
+    ignoreColumns?: string[],
+    options?: {
+      absTol?: number;  // Absolute tolerance for numeric comparison
+      relTol?: number;  // Relative tolerance for numeric comparison
+    }
+  ): Promise<MultiComparisonResult | null> => {
     setLoading(true);
     setError(null);
     try {
       const response = await api.post('/compare', {
         session_id: sessionId,
-        file1,
-        file2,
+        files,
         join_columns: joinColumns,
         ignore_columns: ignoreColumns,
+        abs_tol: options?.absTol ?? 0.0001,
+        rel_tol: options?.relTol ?? 0,
       });
       return response.data;
     } catch (err) {
@@ -166,14 +466,165 @@ export function useApi() {
     }
   }, []);
 
-  // AI Operations
-  const getModels = useCallback(async (): Promise<OllamaModel[]> => {
+  // Multi-File Comparison Operations
+  const compareMultipleFiles = useCallback(async (
+    sessionId: string,
+    files: string[],
+    joinColumns: string[],
+    ignoreColumns?: string[],
+    useChunked = false
+  ): Promise<MultiFileComparisonResult | null> => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await api.get('/ai/models');
-      return response.data.models;
+      const response = await api.post('/compare/multi', {
+        session_id: sessionId,
+        files,
+        join_columns: joinColumns,
+        ignore_columns: ignoreColumns,
+        use_chunked: useChunked,
+      });
+      return response.data;
     } catch (err) {
       handleError(err);
-      return [];
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Chunked Comparison for Large Files
+  const compareLargeFilesChunked = useCallback(async (
+    sessionId: string,
+    file1: string,
+    file2: string,
+    joinColumns: string[]
+  ): Promise<ChunkedComparisonResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.post('/compare/chunked', null, {
+        params: {
+          session_id: sessionId,
+          file1,
+          file2,
+          join_columns: joinColumns,
+        },
+      });
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const getChunkedFileStats = useCallback(async (
+    sessionId: string,
+    filename: string
+  ): Promise<ChunkedFileStats | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get(`/files/${sessionId}/${filename}/chunked-stats`);
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Schema Analysis Operations
+  const analyzeSchemas = useCallback(async (
+    sessionId: string,
+    files: string[]
+  ): Promise<SchemaAnalysisResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.post('/schema/analyze', {
+        session_id: sessionId,
+        files,
+      });
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Quality Check Operations
+  const checkQuality = useCallback(async (
+    sessionId: string,
+    files: string[]
+  ): Promise<QualityCheckResult | MultiQualityResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.post('/quality/check', {
+        session_id: sessionId,
+        files,
+      });
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const getSingleFileQuality = useCallback(async (
+    sessionId: string,
+    filename: string
+  ): Promise<QualityCheckResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get(`/quality/${sessionId}/${filename}`);
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // AI Operations
+  const getModels = useCallback(async (): Promise<OllamaModelsResponse> => {
+    try {
+      const response = await api.get('/ai/models');
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return {
+        models: [],
+        status: {
+          online: false,
+          count: 0,
+          recommended: null,
+          error: 'Failed to connect to backend',
+        },
+      };
+    }
+  }, []);
+
+  const checkAIStatus = useCallback(async (): Promise<{ online: boolean; model_count: number; message: string; setup_hint?: string }> => {
+    try {
+      const response = await api.get('/ai/status');
+      return response.data;
+    } catch (err) {
+      return {
+        online: false,
+        model_count: 0,
+        message: 'Cannot connect to backend',
+      };
     }
   }, []);
 
@@ -221,19 +672,67 @@ export function useApi() {
     }
   }, []);
 
+  // Format Detection
+  const detectFormat = useCallback(async (file: File): Promise<{
+    extension: string;
+    format: string;
+    is_supported: boolean;
+    detected_encoding?: string;
+    encoding_confidence?: number;
+    might_be?: string;
+  } | null> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post('/formats/detect', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    }
+  }, []);
+
+  const getSupportedFormats = useCallback(async (): Promise<Record<string, { name: string; description: string; mime_types: string[] }>> => {
+    try {
+      const response = await api.get('/formats');
+      return response.data.formats || {};
+    } catch (err) {
+      return {};
+    }
+  }, []);
+
   return {
     loading,
     error,
     setError,
+    // File operations
     uploadFiles,
     getFileInfo,
     getFilePreview,
+    getExcelSheets,
+    // Comparison operations
     compareFiles,
+    compareMultipleFiles,
+    // Chunked/Large file operations
+    compareLargeFilesChunked,
+    getChunkedFileStats,
+    // Schema analysis
+    analyzeSchemas,
+    analyzeSchema: analyzeSchemas, // Alias for compatibility
+    // Quality checking
+    checkQuality,
+    getSingleFileQuality,
+    // AI operations
     getModels,
+    checkAIStatus,
     analyzeWithAI,
     suggestJoinColumns,
+    // Format operations
+    detectFormat,
+    getSupportedFormats,
   };
 }
 
 export default useApi;
-
