@@ -9,6 +9,9 @@ from collections import defaultdict
 import re
 from datetime import datetime
 
+# Import centralized config
+from config import QUALITY_FORMAT_PATTERNS
+
 
 class QualityChecker:
     """
@@ -21,18 +24,8 @@ class QualityChecker:
     - Outliers (statistical anomalies)
     """
     
-    # Common format patterns
-    FORMAT_PATTERNS = {
-        'email': r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-        'phone_us': r'^\+?1?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$',
-        'phone_intl': r'^\+?\d{1,4}[-.\s]?\d{1,14}$',
-        'date_iso': r'^\d{4}-\d{2}-\d{2}$',
-        'date_us': r'^\d{1,2}/\d{1,2}/\d{4}$',
-        'zip_us': r'^\d{5}(-\d{4})?$',
-        'url': r'^https?://[^\s]+$',
-        'uuid': r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-        'numeric_id': r'^\d+$',
-    }
+    # Use centralized format patterns from config
+    FORMAT_PATTERNS = QUALITY_FORMAT_PATTERNS
     
     def __init__(self, df: pd.DataFrame, name: str = "Dataset"):
         """

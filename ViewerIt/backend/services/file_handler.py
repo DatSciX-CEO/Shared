@@ -14,20 +14,22 @@ import pandas as pd
 import chardet
 import logging
 
+# Import centralized config
+from config import (
+    UPLOADS_DIR, 
+    MAX_FILE_SIZE, 
+    DANGEROUS_FILENAME_PATTERNS,
+    FILE_DELIMITERS,
+    SUPPORTED_FORMATS_SIMPLE,
+)
+
 logger = logging.getLogger(__name__)
 
-UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
+# Ensure uploads directory exists
 UPLOADS_DIR.mkdir(exist_ok=True)
 
-# Maximum file size in bytes (100MB default)
-MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 100 * 1024 * 1024))
-
-# Dangerous filename patterns to block
-DANGEROUS_PATTERNS = [
-    r'\.\.', r'\\', r'/', r'\x00',  # Path traversal
-    r'^\.', r'^\$', r'^~',  # Hidden/system files
-    r'[<>:"|?*]',  # Invalid Windows characters
-]
+# Use centralized patterns from config
+DANGEROUS_PATTERNS = DANGEROUS_FILENAME_PATTERNS
 
 
 def sanitize_filename(filename: str) -> str:
@@ -74,23 +76,11 @@ def sanitize_filename(filename: str) -> str:
 class FileHandler:
     """Handles file operations for data comparison."""
     
-    SUPPORTED_FORMATS = {
-        ".csv": "CSV",
-        ".tsv": "TSV (Tab-separated)",
-        ".xlsx": "Excel",
-        ".xls": "Excel (Legacy)",
-        ".parquet": "Parquet",
-        ".feather": "Feather",
-        ".json": "JSON",
-        ".jsonl": "JSON Lines",
-        ".dat": "DAT (Concordance)",
-        ".txt": "Text/Delimited",
-        ".xml": "XML",
-        ".zip": "ZIP Archive",
-    }
+    # Use centralized format definitions from config
+    SUPPORTED_FORMATS = SUPPORTED_FORMATS_SIMPLE
     
-    # Common delimiters for auto-detection
-    DELIMITERS = [",", "\t", "|", ";", "\x14"]
+    # Use centralized delimiters from config
+    DELIMITERS = FILE_DELIMITERS
     
     @classmethod
     def save_uploaded_file(cls, file_content: bytes, filename: str, 

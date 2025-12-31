@@ -357,6 +357,38 @@ export interface AIResponse {
   model: string;
 }
 
+// Task types for async operations
+export interface TaskInfo {
+  id: string;
+  task_type: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  has_result: boolean;
+}
+
+export interface TaskResponse<T = unknown> {
+  task_id: string;
+  status: string;
+  message: string;
+  poll_url: string;
+  result?: T;
+  warnings?: Array<{
+    type: string;
+    files?: string[];
+    message: string;
+    suggestion?: string;
+  }>;
+}
+
+export interface TaskStatusResponse<T = unknown> extends TaskInfo {
+  result?: T;
+}
+
 // Custom hook for API operations
 export function useApi() {
   const [loading, setLoading] = useState(false);
@@ -703,6 +735,242 @@ export function useApi() {
     }
   }, []);
 
+  // ============== Task Polling Operations ==============
+
+  const getTaskStatus = useCallback(async <T = unknown>(taskId: string): Promise<TaskStatusResponse<T> | null> => {
+    try {
+      const response = await api.get(`/tasks/${taskId}`);
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    }
+  }, []);
+
+  const getTaskResult = useCallback(async <T = unknown>(taskId: string): Promise<T | null> => {
+    try {
+      const response = await api.get(`/tasks/${taskId}/result`);
+      if (response.status === 202) {
+        // Task still processing
+        return null;
+      }
+      return response.data;
+    } catch (err) {
+      handleError(err);
+      return null;
+    }
+  }, []);
+
+  /**
+   * Poll a task until completion with progress callback
+   */
+  const pollTaskUntilComplete = useCallback(async <T = unknown>(
+    taskId: string,
+    onProgress?: (progress: number, message: string) => void,
+    pollInterval = 500,
+    maxAttempts = 600 // 5 minutes max
+  ): Promise<T | null> => {
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      const status = await getTaskStatus<T>(taskId);
+      
+      if (!status) {
+        return null;
+      }
+      
+      // Report progress
+      if (onProgress) {
+        onProgress(status.progress, status.message);
+      }
+      
+      // Check completion states
+      if (status.status === 'completed') {
+        return status.result ?? null;
+      }
+      
+      if (status.status === 'failed') {
+        setError(status.error || 'Task failed');
+        return null;
+      }
+      
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      attempts++;
+    }
+    
+    setError('Task polling timeout');
+    return null;
+  }, [getTaskStatus]);
+
+  // ============== Async Comparison with Task Polling ==============
+
+  const compareFilesAsync = useCallback(async (
+    sessionId: string,
+    files: string[],
+    joinColumns: string[],
+    ignoreColumns?: string[],
+    options?: {
+      absTol?: number;
+      relTol?: number;
+    },
+    onProgress?: (progress: number, message: string) => void
+  ): Promise<MultiComparisonResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Start the task
+      const response = await api.post('/compare', {
+        session_id: sessionId,
+        files,
+        join_columns: joinColumns,
+        ignore_columns: ignoreColumns,
+        abs_tol: options?.absTol ?? 0.0001,
+        rel_tol: options?.relTol ?? 0,
+      });
+      
+      const taskResponse = response.data as TaskResponse;
+      
+      // Poll for result
+      const result = await pollTaskUntilComplete<MultiComparisonResult>(
+        taskResponse.task_id,
+        onProgress
+      );
+      
+      return result;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [pollTaskUntilComplete]);
+
+  const compareMultipleFilesAsync = useCallback(async (
+    sessionId: string,
+    files: string[],
+    joinColumns: string[],
+    ignoreColumns?: string[],
+    useChunked = false,
+    onProgress?: (progress: number, message: string) => void
+  ): Promise<MultiFileComparisonResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Start the task
+      const response = await api.post('/compare/multi', {
+        session_id: sessionId,
+        files,
+        join_columns: joinColumns,
+        ignore_columns: ignoreColumns,
+        use_chunked: useChunked,
+      });
+      
+      const taskResponse = response.data as TaskResponse;
+      
+      // Poll for result
+      const result = await pollTaskUntilComplete<MultiFileComparisonResult>(
+        taskResponse.task_id,
+        onProgress
+      );
+      
+      return result;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [pollTaskUntilComplete]);
+
+  const checkQualityAsync = useCallback(async (
+    sessionId: string,
+    files: string[],
+    onProgress?: (progress: number, message: string) => void
+  ): Promise<QualityCheckResult | MultiQualityResult | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Start the task
+      const response = await api.post('/quality/check', {
+        session_id: sessionId,
+        files,
+      });
+      
+      const taskResponse = response.data as TaskResponse;
+      
+      // Poll for result
+      const result = await pollTaskUntilComplete<QualityCheckResult | MultiQualityResult>(
+        taskResponse.task_id,
+        onProgress
+      );
+      
+      return result;
+    } catch (err) {
+      handleError(err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [pollTaskUntilComplete]);
+
+  // ============== AI Streaming ==============
+
+  /**
+   * Stream AI analysis with SSE - returns an async generator
+   */
+  const streamAIAnalysis = useCallback(async function* (
+    model: string,
+    prompt: string,
+    comparisonSummary: Record<string, unknown>
+  ): AsyncGenerator<{ type: string; content?: string; error?: string }> {
+    const response = await fetch(`${API_BASE}/ai/analyze/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        prompt,
+        comparison_summary: comparisonSummary,
+      }),
+    });
+
+    if (!response.ok) {
+      yield { type: 'error', error: 'Failed to connect to AI service' };
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      yield { type: 'error', error: 'No response body' };
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            yield data;
+          } catch {
+            // Skip invalid JSON
+          }
+        }
+      }
+    }
+  }, []);
+
   return {
     loading,
     error,
@@ -712,23 +980,32 @@ export function useApi() {
     getFileInfo,
     getFilePreview,
     getExcelSheets,
-    // Comparison operations
+    // Comparison operations (sync)
     compareFiles,
     compareMultipleFiles,
+    // Comparison operations (async with progress)
+    compareFilesAsync,
+    compareMultipleFilesAsync,
     // Chunked/Large file operations
     compareLargeFilesChunked,
     getChunkedFileStats,
     // Schema analysis
     analyzeSchemas,
     analyzeSchema: analyzeSchemas, // Alias for compatibility
-    // Quality checking
+    // Quality checking (sync and async)
     checkQuality,
+    checkQualityAsync,
     getSingleFileQuality,
+    // Task operations
+    getTaskStatus,
+    getTaskResult,
+    pollTaskUntilComplete,
     // AI operations
     getModels,
     checkAIStatus,
     analyzeWithAI,
     suggestJoinColumns,
+    streamAIAnalysis,
     // Format operations
     detectFormat,
     getSupportedFormats,

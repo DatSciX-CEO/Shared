@@ -1,18 +1,27 @@
 """
 AI Service - Ollama integration for intelligent data analysis.
 Enhanced with detailed model metadata and intelligent auto-selection.
+All AI operations are LOCAL ONLY via Ollama - no external API calls.
 """
 import ollama
-from typing import Optional
+from typing import Optional, Generator
 import json
+
+# Import centralized config
+from config import (
+    AI_PREFERRED_MODELS,
+    AI_DEFAULT_MODELS,
+    AI_SYSTEM_PROMPTS,
+    OLLAMA_BASE_URL,
+)
 
 
 class AIService:
-    """Handles AI-powered analysis using Ollama."""
+    """Handles AI-powered analysis using local Ollama models only."""
     
-    # Preferred models in priority order for auto-selection
-    PREFERRED_MODELS = ["llama3.2", "llama3.1", "llama3", "mistral", "phi3", "gemma2", "qwen2"]
-    DEFAULT_MODELS = ["llama3.2", "mistral", "phi3", "gemma2"]
+    # Use centralized model preferences from config
+    PREFERRED_MODELS = AI_PREFERRED_MODELS
+    DEFAULT_MODELS = AI_DEFAULT_MODELS
     
     @classmethod
     def _format_size(cls, size_bytes: int) -> str:
@@ -191,10 +200,8 @@ class AIService:
             comparison_summary: The comparison results dictionary
             user_prompt: The user's question or analysis request
         """
-        system_prompt = """You are an expert data analyst specializing in eDiscovery and legal data comparison. 
-You analyze data differences between datasets and provide actionable insights.
-Always be precise about numbers and specific about which dataset has issues.
-Format your responses with clear sections and bullet points for readability."""
+        # Use centralized system prompt from config
+        system_prompt = AI_SYSTEM_PROMPTS["analysis"]
         
         # Prepare context from comparison
         context = cls._format_comparison_context(comparison_summary)
@@ -227,6 +234,50 @@ Provide a detailed, actionable response:"""
                 "error": str(e),
                 "model": model_name,
             }
+    
+    @classmethod
+    def analyze_comparison_stream(cls, model_name: str, comparison_summary: dict, 
+                                  user_prompt: str) -> Generator[str, None, None]:
+        """
+        Stream AI analysis response token by token for SSE.
+        
+        Args:
+            model_name: The Ollama model to use
+            comparison_summary: The comparison results dictionary
+            user_prompt: The user's question or analysis request
+            
+        Yields:
+            Response tokens as they are generated
+        """
+        # Use centralized system prompt from config
+        system_prompt = AI_SYSTEM_PROMPTS["analysis"]
+        
+        # Prepare context from comparison
+        context = cls._format_comparison_context(comparison_summary)
+        
+        full_prompt = f"""Based on this data comparison analysis:
+
+{context}
+
+User Question: {user_prompt}
+
+Provide a detailed, actionable response:"""
+        
+        try:
+            stream = ollama.chat(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": full_prompt},
+                ],
+                stream=True,
+            )
+            
+            for chunk in stream:
+                if "message" in chunk and "content" in chunk["message"]:
+                    yield chunk["message"]["content"]
+        except Exception as e:
+            yield f"\n\n[Error: {str(e)}]"
     
     @classmethod
     def suggest_join_columns(cls, model_name: str, df1_columns: list[str], 

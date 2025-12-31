@@ -15,6 +15,7 @@ export { QualityCharts } from './QualityCharts';
 export { MultiFileComparison } from './MultiFileComparison';
 export { AnalyticsDashboard } from './AnalyticsDashboard';
 export { ErrorBoundary } from './ErrorBoundary';
+export { TaskProgress } from './TaskProgress';
 
 // Chart components
 export { BarChartViz, PieChartViz, LineChartViz } from './charts';

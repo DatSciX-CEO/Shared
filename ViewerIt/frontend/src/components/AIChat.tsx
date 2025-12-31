@@ -1,10 +1,10 @@
 /**
  * AIChat Component - Ollama-powered AI assistant chat interface
- * Enhanced with ModelSelector integration and status feedback
+ * Enhanced with ModelSelector integration, status feedback, and SSE streaming
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, User, Sparkles, AlertCircle, Zap } from 'lucide-react';
+import { Send, Bot, User, Sparkles, AlertCircle, Zap, Radio } from 'lucide-react';
 import { ModelSelector } from './ModelSelector';
 import { type OllamaModel, type OllamaStatus } from '../hooks/useApi';
 
@@ -12,6 +12,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isStreaming?: boolean;
 }
 
 interface AIChatProps {
@@ -21,9 +22,14 @@ interface AIChatProps {
   onModelChange: (model: string) => void;
   onRefreshModels: () => void;
   isRefreshingModels?: boolean;
+  /** Non-streaming message handler (legacy) */
   onSendMessage: (message: string) => Promise<string | null>;
+  /** Streaming message handler - yields tokens as AsyncGenerator */
+  onStreamMessage?: (message: string) => AsyncGenerator<{ type: string; content?: string; error?: string }>;
   isLoading?: boolean;
   disabled?: boolean;
+  /** Use streaming by default when available */
+  preferStreaming?: boolean;
 }
 
 export function AIChat({ 
@@ -34,42 +40,113 @@ export function AIChat({
   onRefreshModels,
   isRefreshingModels = false,
   onSendMessage,
+  onStreamMessage,
   isLoading = false,
-  disabled = false
+  disabled = false,
+  preferStreaming = true,
 }: AIChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamingRef = useRef<boolean>(false);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
+
+  // Handle streaming response
+  const handleStreamingSend = useCallback(async (userInput: string) => {
+    if (!onStreamMessage) return;
+    
+    setIsStreaming(true);
+    streamingRef.current = true;
+    
+    // Add empty assistant message that we'll update
+    const streamingMessage: Message = {
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    setMessages(prev => [...prev, streamingMessage]);
+    
+    let fullContent = '';
+    
+    try {
+      for await (const event of onStreamMessage(userInput)) {
+        if (!streamingRef.current) break;
+        
+        if (event.type === 'token' && event.content) {
+          fullContent += event.content;
+          // Update the last message with accumulated content
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.content = fullContent;
+            }
+            return updated;
+          });
+        } else if (event.type === 'error') {
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.content = fullContent + `\n\n⚠️ Error: ${event.error}`;
+              lastMsg.isStreaming = false;
+            }
+            return updated;
+          });
+          break;
+        } else if (event.type === 'done') {
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.isStreaming = false;
+            }
+            return updated;
+          });
+        }
+      }
+    } finally {
+      setIsStreaming(false);
+      streamingRef.current = false;
+    }
+  }, [onStreamMessage]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading || disabled) return;
+    if (!input.trim() || isLoading || isStreaming || disabled) return;
 
+    const userInput = input.trim();
     const userMessage: Message = {
       role: 'user',
-      content: input.trim(),
+      content: userInput,
       timestamp: new Date(),
     };
     
     setMessages(prev => [...prev, userMessage]);
     setInput('');
 
-    const response = await onSendMessage(input.trim());
-    
-    if (response) {
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+    // Use streaming if available and preferred
+    if (preferStreaming && onStreamMessage) {
+      await handleStreamingSend(userInput);
+    } else {
+      const response = await onSendMessage(userInput);
+      
+      if (response) {
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: response,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }
     }
   };
 
@@ -82,6 +159,7 @@ export function AIChat({
 
   // Check if AI is ready (model selected and online)
   const isAIReady = modelStatus.online && selectedModel && !disabled;
+  const canStream = preferStreaming && !!onStreamMessage;
 
   return (
     <div className="flex flex-col h-full">
@@ -116,8 +194,11 @@ export function AIChat({
               transition={{ duration: 2, repeat: Infinity }}
               className="w-2 h-2 rounded-full bg-[#39ff14]"
             />
-            <Zap size={12} />
-            <span>AI Ready - {selectedModel.split(':')[0]}</span>
+            {canStream ? <Radio size={12} /> : <Zap size={12} />}
+            <span>
+              AI Ready - {selectedModel.split(':')[0]}
+              {canStream && <span className="text-[#00f5ff] ml-1">(streaming)</span>}
+            </span>
           </motion.div>
         )}
       </div>
@@ -221,19 +302,27 @@ export function AIChat({
                   style={{ fontFamily: 'Rajdhani, sans-serif' }}
                 >
                   {msg.content}
+                  {/* Streaming cursor */}
+                  {msg.isStreaming && (
+                    <motion.span
+                      className="inline-block w-2 h-4 ml-0.5 bg-[#00f5ff]"
+                      animate={{ opacity: [1, 0] }}
+                      transition={{ duration: 0.5, repeat: Infinity }}
+                    />
+                  )}
                 </p>
                 <span 
                   className="text-[10px] text-[#555566] mt-1 block"
                   style={{ fontFamily: 'JetBrains Mono, monospace' }}
                 >
-                  {msg.timestamp.toLocaleTimeString()}
+                  {msg.isStreaming ? 'streaming...' : msg.timestamp.toLocaleTimeString()}
                 </span>
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
 
-        {isLoading && (
+        {(isLoading || isStreaming) && !messages.some(m => m.isStreaming) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -267,13 +356,15 @@ export function AIChat({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
-            disabled={!isAIReady || isLoading}
+            disabled={!isAIReady || isLoading || isStreaming}
             placeholder={
               !modelStatus.online 
                 ? 'Ollama offline...' 
                 : disabled 
                   ? 'Run comparison first...' 
-                  : 'Ask about the data...'
+                  : isStreaming
+                    ? 'AI is responding...'
+                    : 'Ask about the data...'
             }
             className={`flex-1 px-4 py-3 rounded-lg bg-[#12121a] border text-[#e0e0e0] placeholder-[#555566] focus:outline-none resize-none transition-all duration-300 disabled:opacity-50 ${
               isAIReady 
@@ -285,18 +376,27 @@ export function AIChat({
           />
           <motion.button
             onClick={handleSend}
-            disabled={!input.trim() || isLoading || !isAIReady}
+            disabled={!input.trim() || isLoading || isStreaming || !isAIReady}
             className={`
               px-4 rounded-lg transition-all duration-300
-              ${!input.trim() || isLoading || !isAIReady
+              ${!input.trim() || isLoading || isStreaming || !isAIReady
                 ? 'bg-[#2a2a3a] text-[#555566] cursor-not-allowed'
                 : 'bg-gradient-to-r from-[#00f5ff] to-[#ff00ff] text-[#0a0a0f] hover:shadow-[0_0_20px_rgba(0,245,255,0.5)]'
               }
             `}
-            whileHover={input.trim() && !isLoading && isAIReady ? { scale: 1.05 } : {}}
-            whileTap={input.trim() && !isLoading && isAIReady ? { scale: 0.95 } : {}}
+            whileHover={input.trim() && !isLoading && !isStreaming && isAIReady ? { scale: 1.05 } : {}}
+            whileTap={input.trim() && !isLoading && !isStreaming && isAIReady ? { scale: 0.95 } : {}}
           >
-            <Send size={20} />
+            {isStreaming ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              >
+                <Radio size={20} />
+              </motion.div>
+            ) : (
+              <Send size={20} />
+            )}
           </motion.button>
         </div>
         
@@ -310,6 +410,27 @@ export function AIChat({
           >
             Start Ollama service to enable AI chat
           </motion.p>
+        )}
+        
+        {/* Streaming indicator */}
+        {isStreaming && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center justify-center gap-2 mt-2"
+          >
+            <motion.div
+              className="w-1.5 h-1.5 rounded-full bg-[#00f5ff]"
+              animate={{ scale: [1, 1.5, 1] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+            />
+            <span 
+              className="text-[10px] text-[#00f5ff]"
+              style={{ fontFamily: 'JetBrains Mono, monospace' }}
+            >
+              Streaming response from local AI...
+            </span>
+          </motion.div>
         )}
       </div>
     </div>

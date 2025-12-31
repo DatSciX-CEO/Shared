@@ -6,6 +6,7 @@ from .multi_comparator import MultiFileComparator
 from .schema_analyzer import SchemaAnalyzer
 from .quality_checker import QualityChecker, MultiDatasetQualityChecker
 from .chunked_processor import ChunkedProcessor, ParallelProcessor
+from .task_store import TaskStore, Task, TaskStatus, task_store
 
 __all__ = [
     "FileHandler", 
@@ -17,5 +18,9 @@ __all__ = [
     "MultiDatasetQualityChecker",
     "ChunkedProcessor",
     "ParallelProcessor",
+    "TaskStore",
+    "Task",
+    "TaskStatus",
+    "task_store",
 ]
 

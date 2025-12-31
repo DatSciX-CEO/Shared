@@ -2,18 +2,21 @@
 ViewerIt Backend - FastAPI Application
 eDiscovery Data Comparison & AI Analysis Platform
 Enhanced with multi-file comparison, schema analysis, and quality checking.
+
+100% LOCAL ONLY - No external services or telemetry.
 """
 import time
+import asyncio
+import json
 from collections import defaultdict
 from pathlib import Path
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 import logging
-import os
 
 from services import (
     FileHandler, 
@@ -23,23 +26,28 @@ from services import (
     SchemaAnalyzer,
     QualityChecker,
     MultiDatasetQualityChecker,
+    task_store,
+    TaskStatus,
 )
 from services.chunked_processor import ChunkedProcessor, LARGE_FILE_THRESHOLD
-from config import CORS_ORIGINS, SUPPORTED_FORMATS, LOG_LEVEL
+from config import (
+    CORS_ORIGINS, 
+    SUPPORTED_FORMATS, 
+    LOG_LEVEL,
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW,
+)
 
 # Configure logging
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
-
-# Rate limiting configuration
-RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", 100))  # requests per window
-RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", 60))  # seconds
 
 
 class RateLimiter:
     """
     Simple in-memory rate limiter using sliding window.
     Limits requests per IP address to prevent abuse.
+    100% local - no external services.
     """
     
     def __init__(self, max_requests: int = 100, window_seconds: int = 60):
@@ -84,7 +92,7 @@ class RateLimiter:
         return max(0, oldest_in_window + self.window_seconds - time.time())
 
 
-# Initialize rate limiter
+# Initialize rate limiter with config values
 rate_limiter = RateLimiter(RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW)
 
 app = FastAPI(
@@ -184,6 +192,132 @@ class AIExplainRequest(BaseModel):
     model: str
     column_name: str
     differences: list[dict]
+
+class AIStreamRequest(BaseModel):
+    model: str
+    prompt: str
+    comparison_summary: dict
+
+
+# ============== Background Task Functions ==============
+
+def run_comparison_task(
+    task_id: str,
+    session_id: str,
+    files: list[str],
+    join_columns: list[str],
+    ignore_columns: list[str] | None,
+    abs_tol: float,
+    rel_tol: float,
+):
+    """Background task for pairwise file comparison."""
+    try:
+        task_store.update_progress(task_id, 10, "Loading base file...")
+        
+        base_file = files[0]
+        df_base = FileHandler.load_dataframe(session_id, base_file)
+        
+        comparisons = []
+        total_comparisons = len(files) - 1
+        
+        for idx, other_file in enumerate(files[1:]):
+            progress = 10 + int((idx / total_comparisons) * 80)
+            task_store.update_progress(
+                task_id, progress, f"Comparing {base_file} vs {other_file}..."
+            )
+            
+            df_other = FileHandler.load_dataframe(session_id, other_file)
+            
+            comparator = DataComparator(df_base, df_other, base_file, other_file)
+            result = comparator.compare(
+                join_columns=join_columns,
+                ignore_columns=ignore_columns,
+                abs_tol=abs_tol,
+                rel_tol=rel_tol,
+            )
+            
+            result["statistics"] = comparator.get_statistics()
+            result["file1"] = base_file
+            result["file2"] = other_file
+            
+            comparisons.append(result)
+        
+        task_store.complete_task(task_id, {"comparisons": comparisons})
+        
+    except Exception as e:
+        logger.error(f"Comparison task {task_id} failed: {str(e)}")
+        task_store.fail_task(task_id, str(e))
+
+
+def run_multi_comparison_task(
+    task_id: str,
+    session_id: str,
+    files: list[str],
+    join_columns: list[str],
+    ignore_columns: list[str] | None,
+):
+    """Background task for multi-file comparison."""
+    try:
+        task_store.update_progress(task_id, 10, "Loading dataframes...")
+        
+        dataframes = {}
+        for idx, filename in enumerate(files):
+            progress = 10 + int((idx / len(files)) * 30)
+            task_store.update_progress(task_id, progress, f"Loading {filename}...")
+            df = FileHandler.load_dataframe(session_id, filename)
+            dataframes[filename] = df
+        
+        task_store.update_progress(task_id, 50, "Performing multi-file comparison...")
+        
+        comparator = MultiFileComparator(dataframes)
+        result = comparator.compare(
+            join_columns=join_columns,
+            ignore_columns=ignore_columns,
+        )
+        
+        task_store.update_progress(task_id, 90, "Generating reconciliation report...")
+        result["reconciliation_report"] = comparator.get_reconciliation_report()
+        
+        task_store.complete_task(task_id, result)
+        
+    except Exception as e:
+        logger.error(f"Multi-comparison task {task_id} failed: {str(e)}")
+        task_store.fail_task(task_id, str(e))
+
+
+def run_quality_check_task(
+    task_id: str,
+    session_id: str,
+    files: list[str],
+):
+    """Background task for quality checking."""
+    try:
+        if len(files) == 1:
+            task_store.update_progress(task_id, 20, f"Loading {files[0]}...")
+            filename = files[0]
+            df = FileHandler.load_dataframe(session_id, filename)
+            
+            task_store.update_progress(task_id, 50, "Running quality checks...")
+            checker = QualityChecker(df, filename)
+            result = checker.check_all()
+        else:
+            dataframes = {}
+            for idx, filename in enumerate(files):
+                progress = 10 + int((idx / len(files)) * 40)
+                task_store.update_progress(task_id, progress, f"Loading {filename}...")
+                df = FileHandler.load_dataframe(session_id, filename)
+                dataframes[filename] = df
+            
+            task_store.update_progress(task_id, 60, "Running multi-dataset quality checks...")
+            checker = MultiDatasetQualityChecker(dataframes)
+            result = checker.check_all()
+        
+        task_store.complete_task(task_id, result)
+        
+    except Exception as e:
+        logger.error(f"Quality check task {task_id} failed: {str(e)}")
+        task_store.fail_task(task_id, str(e))
+
 
 # ============== Health & Info ==============
 
@@ -311,8 +445,57 @@ async def detect_format(file: UploadFile = File(...)):
 # ============== Pairwise Comparison Operations ==============
 
 @app.post("/compare")
-async def compare_files(request: CompareRequest):
-    """Compare two or more files (pairwise) and return detailed results."""
+async def compare_files(request: CompareRequest, background_tasks: BackgroundTasks):
+    """
+    Compare two or more files (pairwise) and return detailed results.
+    Returns task_id for async processing - poll /tasks/{task_id} for results.
+    """
+    try:
+        if len(request.files) < 2:
+            raise HTTPException(status_code=400, detail="At least two files are required for comparison")
+        
+        # Validate files exist before starting task
+        for filename in request.files:
+            files = FileHandler.get_session_files(request.session_id)
+            if filename not in files:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        
+        # Create task and start background processing
+        task = task_store.create_task("comparison")
+        
+        background_tasks.add_task(
+            run_comparison_task,
+            task.id,
+            request.session_id,
+            request.files,
+            request.join_columns,
+            request.ignore_columns,
+            request.abs_tol,
+            request.rel_tol,
+        )
+        
+        return {
+            "task_id": task.id,
+            "status": "pending",
+            "message": f"Comparison task started for {len(request.files)} files",
+            "poll_url": f"/tasks/{task.id}",
+        }
+        
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Comparison error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/compare/sync")
+async def compare_files_sync(request: CompareRequest):
+    """
+    Synchronous comparison (immediate result, no task polling).
+    Use for small files or when immediate response is needed.
+    """
     try:
         if len(request.files) < 2:
             raise HTTPException(status_code=400, detail="At least two files are required for comparison")
@@ -396,12 +579,79 @@ def _estimate_file_rows(session_id: str, filename: str) -> tuple[int, bool]:
 
 
 @app.post("/compare/multi")
-async def compare_multiple_files(request: MultiCompareRequest):
+async def compare_multiple_files(request: MultiCompareRequest, background_tasks: BackgroundTasks):
     """
     Compare 3+ files simultaneously with cross-file reconciliation.
-    Returns comprehensive multi-file comparison results.
+    Returns task_id for async processing - poll /tasks/{task_id} for results.
     
     For large files, set use_chunked=True for memory-efficient processing.
+    """
+    try:
+        if len(request.files) < 2:
+            raise HTTPException(status_code=400, detail="At least 2 files required")
+        
+        # Validate files exist before starting task
+        for filename in request.files:
+            files = FileHandler.get_session_files(request.session_id)
+            if filename not in files:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        
+        # Check if any files are large
+        large_files = []
+        for filename in request.files:
+            _, is_large = _estimate_file_rows(request.session_id, filename)
+            if is_large:
+                large_files.append(filename)
+        
+        warnings = []
+        if large_files and not request.use_chunked:
+            warnings.append({
+                "type": "large_files_detected",
+                "files": large_files,
+                "message": f"{len(large_files)} large file(s) detected.",
+                "suggestion": "Set use_chunked=True for memory-efficient processing."
+            })
+        
+        # Create task and start background processing
+        task = task_store.create_task("multi_comparison")
+        
+        background_tasks.add_task(
+            run_multi_comparison_task,
+            task.id,
+            request.session_id,
+            request.files,
+            request.join_columns,
+            request.ignore_columns,
+        )
+        
+        response = {
+            "task_id": task.id,
+            "status": "pending",
+            "message": f"Multi-file comparison started for {len(request.files)} files",
+            "poll_url": f"/tasks/{task.id}",
+        }
+        
+        if warnings:
+            response["warnings"] = warnings
+        
+        return response
+        
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Multi-comparison error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/compare/multi/sync")
+async def compare_multiple_files_sync(request: MultiCompareRequest):
+    """
+    Synchronous multi-file comparison (immediate result, no task polling).
+    Use for small files or when immediate response is needed.
     """
     try:
         if len(request.files) < 2:
@@ -560,10 +810,52 @@ async def analyze_schemas(request: SchemaAnalysisRequest):
 # ============== Data Quality Operations ==============
 
 @app.post("/quality/check")
-async def check_data_quality(request: QualityCheckRequest):
+async def check_data_quality(request: QualityCheckRequest, background_tasks: BackgroundTasks):
     """
     Run comprehensive data quality checks on files.
-    Returns completeness, uniqueness, validity, and outlier analysis.
+    Returns task_id for async processing - poll /tasks/{task_id} for results.
+    """
+    try:
+        if len(request.files) < 1:
+            raise HTTPException(status_code=400, detail="At least 1 file required")
+        
+        # Validate files exist before starting task
+        for filename in request.files:
+            files = FileHandler.get_session_files(request.session_id)
+            if filename not in files:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        
+        # Create task and start background processing
+        task = task_store.create_task("quality_check")
+        
+        background_tasks.add_task(
+            run_quality_check_task,
+            task.id,
+            request.session_id,
+            request.files,
+        )
+        
+        return {
+            "task_id": task.id,
+            "status": "pending",
+            "message": f"Quality check started for {len(request.files)} file(s)",
+            "poll_url": f"/tasks/{task.id}",
+        }
+        
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Quality check error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/quality/check/sync")
+async def check_data_quality_sync(request: QualityCheckRequest):
+    """
+    Synchronous quality check (immediate result, no task polling).
+    Use for small files or when immediate response is needed.
     """
     try:
         if len(request.files) < 1:
@@ -605,6 +897,65 @@ async def get_single_file_quality(session_id: str, filename: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+# ============== Task Management Operations ==============
+
+@app.get("/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Get the status and result of a background task.
+    Poll this endpoint to track progress of async operations.
+    """
+    task = task_store.get_task(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+    
+    response = task.to_dict()
+    
+    # Include result if task is completed
+    if task.status == TaskStatus.COMPLETED and task.result is not None:
+        response["result"] = task.result
+    
+    return response
+
+
+@app.get("/tasks/{task_id}/result")
+async def get_task_result(task_id: str):
+    """
+    Get only the result of a completed task.
+    Returns 202 if task is still processing.
+    """
+    task = task_store.get_task(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+    
+    if task.status == TaskStatus.FAILED:
+        raise HTTPException(status_code=500, detail=task.error or "Task failed")
+    
+    if task.status != TaskStatus.COMPLETED:
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": task.status.value,
+                "progress": task.progress,
+                "message": task.message,
+            }
+        )
+    
+    return task.result
+
+
+@app.get("/tasks")
+async def list_tasks(limit: int = Query(default=50, le=100)):
+    """List recent tasks with their status."""
+    return {
+        "tasks": task_store.list_tasks(limit),
+        "active_count": task_store.get_active_task_count(),
+    }
+
+
 # ============== AI Operations ==============
 
 @app.get("/ai/models")
@@ -620,13 +971,56 @@ async def get_ai_status():
 
 @app.post("/ai/analyze")
 async def ai_analyze(request: AIAnalyzeRequest):
-    """Use AI to analyze comparison results."""
+    """Use AI to analyze comparison results (non-streaming)."""
     result = AIService.analyze_comparison(
         model_name=request.model,
         comparison_summary=request.comparison_summary,
         user_prompt=request.prompt,
     )
     return result
+
+
+@app.post("/ai/analyze/stream")
+async def ai_analyze_stream(request: AIStreamRequest):
+    """
+    Stream AI analysis via Server-Sent Events (SSE).
+    Tokens are streamed as they're generated by local Ollama.
+    
+    Frontend should use EventSource or fetch with streaming body.
+    """
+    async def generate_sse():
+        """Generate SSE events from Ollama stream."""
+        try:
+            # Send initial event
+            yield f"data: {json.dumps({'type': 'start', 'model': request.model})}\n\n"
+            
+            # Stream tokens
+            for token in AIService.analyze_comparison_stream(
+                model_name=request.model,
+                comparison_summary=request.comparison_summary,
+                user_prompt=request.prompt,
+            ):
+                # Escape newlines for SSE format
+                escaped_token = token.replace('\n', '\\n')
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                # Small delay to prevent overwhelming the client
+                await asyncio.sleep(0.01)
+            
+            # Send completion event
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        generate_sse(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 @app.post("/ai/suggest-join")
 async def ai_suggest_join(request: AISuggestRequest):
