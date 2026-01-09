@@ -4,6 +4,7 @@
 export { GlitchText } from './GlitchText';
 export { NeonButton } from './NeonButton';
 export { CyberCard } from './CyberCard';
+export { CyberScanner } from './CyberScanner';
 export { FileDropzone } from './FileDropzone';
 export { DataTable } from './DataTable';
 export { AIChat } from './AIChat';

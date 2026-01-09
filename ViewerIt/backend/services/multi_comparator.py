@@ -50,37 +50,38 @@ class MultiFileComparator:
         self._results: Optional[dict] = None
         self._use_rust = RUST_AVAILABLE
     
-    def compare(self, join_columns: list[str], 
+    def compare(self, join_columns: list[str],
                 ignore_columns: Optional[list[str]] = None) -> dict:
         """
         Perform multi-file comparison.
-        
+
         Args:
             join_columns: Columns to use as unique identifiers
             ignore_columns: Columns to exclude from comparison
-            
+
         Returns:
             Comprehensive comparison results
         """
-        # Prepare dataframes
+        # Prepare dataframes - use views where possible to reduce memory
         dfs = {}
         for name, df in self.dataframes.items():
-            df_copy = df.copy()
             if ignore_columns:
-                cols_to_drop = [c for c in ignore_columns if c in df_copy.columns]
-                df_copy = df_copy.drop(columns=cols_to_drop, errors='ignore')
-            dfs[name] = df_copy
-        
+                cols_to_keep = [c for c in df.columns if c not in ignore_columns]
+                dfs[name] = df[cols_to_keep]
+            else:
+                dfs[name] = df
+
         # Create composite key for each dataframe
         keyed_dfs = {}
         for name, df in dfs.items():
             if not all(col in df.columns for col in join_columns):
                 missing = [col for col in join_columns if col not in df.columns]
                 raise ValueError(f"File '{name}' missing join columns: {missing}")
-            
-            # Create composite key
-            df_keyed = df.copy()
-            df_keyed['_composite_key'] = df_keyed[join_columns].astype(str).agg('|'.join, axis=1)
+
+            # Create composite key - add column without full copy
+            df_keyed = df.assign(
+                _composite_key=df[join_columns].astype(str).agg('|'.join, axis=1)
+            )
             keyed_dfs[name] = df_keyed
         
         # Use Rust-accelerated path if available

@@ -468,6 +468,7 @@ export function useApi() {
   }, []);
 
   // Pairwise Comparison Operations
+  // Uses /compare/sync for immediate results (suitable for smaller files)
   const compareFiles = useCallback(async (
     sessionId: string,
     files: string[],
@@ -481,7 +482,8 @@ export function useApi() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.post('/compare', {
+      // Use sync endpoint for immediate results
+      const response = await api.post('/compare/sync', {
         session_id: sessionId,
         files,
         join_columns: joinColumns,
@@ -499,6 +501,7 @@ export function useApi() {
   }, []);
 
   // Multi-File Comparison Operations
+  // Uses /compare/multi/sync for immediate results (suitable for smaller files)
   const compareMultipleFiles = useCallback(async (
     sessionId: string,
     files: string[],
@@ -509,7 +512,8 @@ export function useApi() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.post('/compare/multi', {
+      // Use sync endpoint for immediate results
+      const response = await api.post('/compare/multi/sync', {
         session_id: sessionId,
         files,
         join_columns: joinColumns,
@@ -591,6 +595,7 @@ export function useApi() {
   }, []);
 
   // Quality Check Operations
+  // Uses /quality/check/sync for immediate results
   const checkQuality = useCallback(async (
     sessionId: string,
     files: string[]
@@ -598,7 +603,8 @@ export function useApi() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.post('/quality/check', {
+      // Use sync endpoint for immediate results
+      const response = await api.post('/quality/check/sync', {
         session_id: sessionId,
         files,
       });

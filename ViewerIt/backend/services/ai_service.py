@@ -3,9 +3,9 @@ AI Service - Ollama integration for intelligent data analysis.
 Enhanced with detailed model metadata and intelligent auto-selection.
 All AI operations are LOCAL ONLY via Ollama - no external API calls.
 """
-import ollama
 from typing import Optional, Generator
 import json
+import logging
 
 # Import centralized config
 from config import (
@@ -14,6 +14,24 @@ from config import (
     AI_SYSTEM_PROMPTS,
     OLLAMA_BASE_URL,
 )
+
+logger = logging.getLogger(__name__)
+
+# Lazy-load ollama to prevent startup failure if not installed
+_ollama = None
+
+def _get_ollama():
+    """Lazy-load the ollama module to prevent startup failures."""
+    global _ollama
+    if _ollama is None:
+        try:
+            import ollama
+            _ollama = ollama
+            logger.info("Ollama module loaded successfully")
+        except ImportError:
+            logger.warning("Ollama not installed. AI features will be unavailable. Install with: pip install ollama")
+            _ollama = None
+    return _ollama
 
 
 class AIService:
@@ -70,6 +88,15 @@ class AIService:
     @classmethod
     def check_ollama_status(cls) -> dict:
         """Check if Ollama is running and accessible."""
+        ollama = _get_ollama()
+        if ollama is None:
+            return {
+                "online": False,
+                "model_count": 0,
+                "message": "Ollama module not installed",
+                "error": "Ollama not installed",
+                "setup_hint": "Install Ollama with: pip install ollama && ollama serve"
+            }
         try:
             response = ollama.list()
             model_count = len(response.get("models", []))
@@ -99,10 +126,36 @@ class AIService:
     def get_available_models(cls) -> dict:
         """
         Fetch list of available Ollama models with detailed metadata.
-        
+
         Returns:
             dict with 'models' list and 'status' info
         """
+        ollama = _get_ollama()
+        if ollama is None:
+            return {
+                "models": [
+                    {
+                        "name": m,
+                        "size": 0,
+                        "size_human": "N/A",
+                        "modified_at": "",
+                        "family": "default",
+                        "parameter_size": "Unknown",
+                        "quantization": "Unknown",
+                        "format": "unknown",
+                        "families": [],
+                        "is_available": False,
+                    }
+                    for m in cls.DEFAULT_MODELS
+                ],
+                "status": {
+                    "online": False,
+                    "count": 0,
+                    "recommended": None,
+                    "error": "Ollama not installed",
+                    "setup_hint": "Install Ollama with: pip install ollama && ollama serve",
+                },
+            }
         try:
             response = ollama.list()
             models = []
@@ -214,6 +267,13 @@ User Question: {user_prompt}
 
 Provide a detailed, actionable response:"""
         
+        ollama = _get_ollama()
+        if ollama is None:
+            return {
+                "success": False,
+                "error": "Ollama not installed. Install with: pip install ollama",
+                "model": model_name,
+            }
         try:
             response = ollama.chat(
                 model=model_name,
@@ -222,7 +282,7 @@ Provide a detailed, actionable response:"""
                     {"role": "user", "content": full_prompt},
                 ],
             )
-            
+
             return {
                 "success": True,
                 "response": response["message"]["content"],
@@ -234,9 +294,9 @@ Provide a detailed, actionable response:"""
                 "error": str(e),
                 "model": model_name,
             }
-    
+
     @classmethod
-    def analyze_comparison_stream(cls, model_name: str, comparison_summary: dict, 
+    def analyze_comparison_stream(cls, model_name: str, comparison_summary: dict,
                                   user_prompt: str) -> Generator[str, None, None]:
         """
         Stream AI analysis response token by token for SSE.
@@ -262,7 +322,11 @@ Provide a detailed, actionable response:"""
 User Question: {user_prompt}
 
 Provide a detailed, actionable response:"""
-        
+
+        ollama = _get_ollama()
+        if ollama is None:
+            yield "[Error: Ollama not installed. Install with: pip install ollama]"
+            return
         try:
             stream = ollama.chat(
                 model=model_name,
@@ -272,13 +336,13 @@ Provide a detailed, actionable response:"""
                 ],
                 stream=True,
             )
-            
+
             for chunk in stream:
                 if "message" in chunk and "content" in chunk["message"]:
                     yield chunk["message"]["content"]
         except Exception as e:
             yield f"\n\n[Error: {str(e)}]"
-    
+
     @classmethod
     def suggest_join_columns(cls, model_name: str, df1_columns: list[str], 
                             df2_columns: list[str]) -> dict:
@@ -297,25 +361,44 @@ Consider columns that appear to be:
 
 Return your answer as a JSON object with this structure:
 {{"suggested_columns": ["column1", "column2"], "reasoning": "explanation"}}"""
-        
+
+        ollama = _get_ollama()
+        if ollama is None:
+            return {
+                "success": False,
+                "error": "Ollama not installed. Install with: pip install ollama",
+            }
         try:
             response = ollama.chat(
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
             )
-            
+
             content = response["message"]["content"]
-            # Try to extract JSON from response
+            # Try to extract JSON from response with structure validation
             try:
                 import re
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
                 if json_match:
                     result = json.loads(json_match.group())
-                    return {"success": True, **result}
-            except (json.JSONDecodeError, AttributeError, KeyError):
-                # JSON extraction failed, fall through to return raw content
-                pass
-            
+                    # Validate expected structure
+                    if isinstance(result, dict):
+                        suggested = result.get("suggested_columns", [])
+                        reasoning = result.get("reasoning", "")
+                        # Ensure suggested_columns is a list of strings
+                        if isinstance(suggested, list):
+                            suggested = [str(c) for c in suggested if c]
+                        else:
+                            suggested = []
+                        return {
+                            "success": True,
+                            "suggested_columns": suggested,
+                            "reasoning": str(reasoning) if reasoning else content,
+                        }
+            except (json.JSONDecodeError, AttributeError, KeyError, TypeError) as e:
+                # JSON extraction/validation failed, fall through to return raw content
+                logger.warning(f"Failed to parse LLM JSON response: {e}")
+
             return {
                 "success": True,
                 "suggested_columns": [],
@@ -342,13 +425,19 @@ Provide insights on:
 2. Potential causes (encoding, formatting, data entry errors?)
 3. Which dataset appears to have the correct/preferred format
 4. Recommendations for data reconciliation"""
-        
+
+        ollama = _get_ollama()
+        if ollama is None:
+            return {
+                "success": False,
+                "error": "Ollama not installed. Install with: pip install ollama",
+            }
         try:
             response = ollama.chat(
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
             )
-            
+
             return {
                 "success": True,
                 "explanation": response["message"]["content"],

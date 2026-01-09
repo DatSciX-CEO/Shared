@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import uvicorn
 import logging
@@ -160,8 +160,17 @@ class CompareRequest(BaseModel):
     files: list[str]
     join_columns: list[str]
     ignore_columns: Optional[list[str]] = None
-    abs_tol: float = 0.0001
-    rel_tol: float = 0.0
+    abs_tol: float = Field(default=0.0001, ge=0.0, le=1.0, description="Absolute tolerance for numeric comparison")
+    rel_tol: float = Field(default=0.0, ge=0.0, le=1.0, description="Relative tolerance for numeric comparison")
+
+    @field_validator('abs_tol', 'rel_tol')
+    @classmethod
+    def validate_tolerance(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError('Tolerance must be non-negative')
+        if v > 1:
+            raise ValueError('Tolerance must be at most 1.0')
+        return v
 
 class MultiCompareRequest(BaseModel):
     session_id: str
