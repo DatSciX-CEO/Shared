@@ -1,0 +1,8 @@
+linked_id,file1_path,file2_path,type,similarity_score,identical,file1_count,file2_count,common,only_in_file1,only_in_file2,total_mismatches
+e1921391b3a6c9b2:e1921391b3a6c9b2,C:\Shared\ViewerIt\test_data\sample_file_a.csv,C:\Shared\ViewerIt\backend\uploads\5adfd114-bc55-4d08-bdd6-a3acd29530bd\sample_file_a.csv,structured,1.0000,true,7,7,7,0,0,0
+94b4c8a4a4d011f6:94b4c8a4a4d011f6,C:\Shared\ViewerIt\test_data\sample_file_b.csv,C:\Shared\ViewerIt\backend\uploads\5adfd114-bc55-4d08-bdd6-a3acd29530bd\sample_file_b.csv,structured,1.0000,true,7,7,7,0,0,0
+3e7a61128cdbdaba:3e7a61128cdbdaba,C:\Shared\ViewerIt\test_data\sample_file_c.csv,C:\Shared\ViewerIt\backend\uploads\5adfd114-bc55-4d08-bdd6-a3acd29530bd\sample_file_c.csv,structured,1.0000,true,7,7,7,0,0,0
+a4be471c5c7a0e96:3e7a61128cdbdaba,C:\Shared\ViewerIt\test_data\sample_schema_diff.csv,C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_c.csv,structured,0.4286,false,5,5,3,2,2,0
+57ac9af2afc531a4:3e7a61128cdbdaba,C:\Shared\ViewerIt\test_data\sample_with_nulls.csv,C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_c.csv,structured,0.4286,false,5,5,3,2,2,3
+a4be471c5c7a0e96:e1921391b3a6c9b2,C:\Shared\ViewerIt\test_data\sample_schema_diff.csv,C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_a.csv,structured,1.0000,true,5,5,5,0,0,0
+57ac9af2afc531a4:e1921391b3a6c9b2,C:\Shared\ViewerIt\test_data\sample_with_nulls.csv,C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_a.csv,structured,1.0000,false,5,5,5,0,0,5

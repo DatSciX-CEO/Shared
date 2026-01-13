@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CompareIt Report</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --success: #3fb950;
+            --warning: #d29922;
+            --danger: #f85149;
+            --border: #30363d;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .summary-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+        }
+        
+        .summary-card .label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .summary-card .value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 0.25rem;
+        }
+        
+        .summary-card .value.success { color: var(--success); }
+        .summary-card .value.warning { color: var(--warning); }
+        .summary-card .value.danger { color: var(--danger); }
+        
+        .table-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        th:hover {
+            color: var(--text-primary);
+        }
+        
+        th.sorted-asc::after { content: ' ▲'; }
+        th.sorted-desc::after { content: ' ▼'; }
+        
+        tr:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        .similarity-bar {
+            width: 80px;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+        
+        .similarity-bar .fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+        
+        .similarity-bar .fill.high { background: var(--success); }
+        .similarity-bar .fill.medium { background: var(--warning); }
+        .similarity-bar .fill.low { background: var(--danger); }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge.identical { background: rgba(63, 185, 80, 0.2); color: var(--success); }
+        .badge.different { background: rgba(210, 153, 34, 0.2); color: var(--warning); }
+        .badge.error { background: rgba(248, 81, 73, 0.2); color: var(--danger); }
+        
+        .path {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+            font-size: 0.8125rem;
+        }
+        
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CompareIt Report</h1>
+        <p class="subtitle">File comparison analysis</p>
+
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="label">Pairs Compared</div>
+                <div class="value">7</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Identical</div>
+                <div class="value success">4</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Different</div>
+                <div class="value warning">3</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Errors</div>
+                <div class="value">0</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Avg Similarity</div>
+                <div class="value">83.7%</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Min Similarity</div>
+                <div class="value">42.9%</div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="results-table">
+                <thead>
+                    <tr>
+                        <th data-sort="status">Status</th>
+                        <th data-sort="file1">File 1</th>
+                        <th data-sort="file2">File 2</th>
+                        <th data-sort="similarity">Similarity</th>
+                        <th data-sort="type">Type</th>
+                        <th data-sort="common">Common</th>
+                        <th data-sort="only1">Only in F1</th>
+                        <th data-sort="only2">Only in F2</th>
+                        <th>Artifacts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge identical">Identical</span></td>
+                        <td class="path" title="C:\Shared\ViewerIt\test_data\sample_file_a.csv">...\ViewerIt\test_data\sample_file_a.csv</td>
+                        <td class="path" title="C:\Shared\ViewerIt\backend\uploads\5adfd114-bc55-4d08-bdd6-a3acd29530bd\sample_file_a.csv">...8-bdd6-a3acd29530bd\sample_file_a.csv</td>
+                        <td>
+                            <span class="similarity-bar"><span class="fill high" style="width: 100%"></span></span>
+                            100.0%
+                        </td>
+                        <td>csv</td>
+                        <td>7</td>
+                        <td>0</td>
+                        <td>0</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge identical">Identical</span></td>
+                        <td class="path" title="C:\Shared\ViewerIt\test_data\sample_file_b.csv">...\ViewerIt\test_data\sample_file_b.csv</td>
+                        <td class="path" title="C:\Shared\ViewerIt\backend\uploads\5adfd114-bc55-4d08-bdd6-a3acd29530bd\sample_file_b.csv">...8-bdd6-a3acd29530bd\sample_file_b.csv</td>
+                        <td>
+                            <span class="similarity-bar"><span class="fill high" style="width: 100%"></span></span>
+                            100.0%
+                        </td>
+                        <td>csv</td>
+                        <td>7</td>
+                        <td>0</td>
+                        <td>0</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge identical">Identical</span></td>
+                        <td class="path" title="C:\Shared\ViewerIt\test_data\sample_file_c.csv">...\ViewerIt\test_data\sample_file_c.csv</td>
+                        <td class="path" title="C:\Shared\ViewerIt\backend\uploads\5adfd114-bc55-4d08-bdd6-a3acd29530bd\sample_file_c.csv">...8-bdd6-a3acd29530bd\sample_file_c.csv</td>
+                        <td>
+                            <span class="similarity-bar"><span class="fill high" style="width: 100%"></span></span>
+                            100.0%
+                        </td>
+                        <td>csv</td>
+                        <td>7</td>
+                        <td>0</td>
+                        <td>0</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge different">Different</span></td>
+                        <td class="path" title="C:\Shared\ViewerIt\test_data\sample_schema_diff.csv">...erIt\test_data\sample_schema_diff.csv</td>
+                        <td class="path" title="C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_c.csv">...6-be79-163aa16c95d0\sample_file_c.csv</td>
+                        <td>
+                            <span class="similarity-bar"><span class="fill low" style="width: 43%"></span></span>
+                            42.9%
+                        </td>
+                        <td>csv</td>
+                        <td>3</td>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge different">Different</span></td>
+                        <td class="path" title="C:\Shared\ViewerIt\test_data\sample_with_nulls.csv">...werIt\test_data\sample_with_nulls.csv</td>
+                        <td class="path" title="C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_c.csv">...6-be79-163aa16c95d0\sample_file_c.csv</td>
+                        <td>
+                            <span class="similarity-bar"><span class="fill low" style="width: 43%"></span></span>
+                            42.9%
+                        </td>
+                        <td>csv</td>
+                        <td>3</td>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge identical">Identical</span></td>
+                        <td class="path" title="C:\Shared\ViewerIt\test_data\sample_schema_diff.csv">...erIt\test_data\sample_schema_diff.csv</td>
+                        <td class="path" title="C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_a.csv">...6-be79-163aa16c95d0\sample_file_a.csv</td>
+                        <td>
+                            <span class="similarity-bar"><span class="fill high" style="width: 100%"></span></span>
+                            100.0%
+                        </td>
+                        <td>csv</td>
+                        <td>5</td>
+                        <td>0</td>
+                        <td>0</td>
+                        <td>-</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge different">Different</span></td>
+                        <td class="path" title="C:\Shared\ViewerIt\test_data\sample_with_nulls.csv">...werIt\test_data\sample_with_nulls.csv</td>
+                        <td class="path" title="C:\Shared\ViewerIt\backend\uploads\64af6b79-bbae-4b56-be79-163aa16c95d0\sample_file_a.csv">...6-be79-163aa16c95d0\sample_file_a.csv</td>
+                        <td>
+                            <span class="similarity-bar"><span class="fill high" style="width: 100%"></span></span>
+                            100.0%
+                        </td>
+                        <td>csv</td>
+                        <td>5</td>
+                        <td>0</td>
+                        <td>0</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    <script>
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const table = th.closest('table');
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const col = th.cellIndex;
+                const isAsc = th.classList.contains('sorted-asc');
+                
+                // Clear other sort indicators
+                table.querySelectorAll('th').forEach(h => {
+                    h.classList.remove('sorted-asc', 'sorted-desc');
+                });
+                
+                th.classList.add(isAsc ? 'sorted-desc' : 'sorted-asc');
+                
+                rows.sort((a, b) => {
+                    let aVal = a.cells[col].textContent.trim();
+                    let bVal = b.cells[col].textContent.trim();
+                    
+                    // Try numeric sort
+                    const aNum = parseFloat(aVal.replace('%', ''));
+                    const bNum = parseFloat(bVal.replace('%', ''));
+                    
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        return isAsc ? bNum - aNum : aNum - bNum;
+                    }
+                    
+                    return isAsc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+                });
+                
+                rows.forEach(row => tbody.appendChild(row));
+            });
+        });
+    </script>
+</body>
+</html>
