@@ -1,0 +1,28 @@
+# Google ADK
+google-adk>=0.2.0
+
+# Streamlit UI
+streamlit>=1.28.0
+
+# Data Processing
+pandas>=2.0.0
+openpyxl>=3.1.0
+numpy>=1.24.0
+
+# Machine Learning & GNN
+torch>=2.0.0
+torch-geometric>=2.3.0
+scikit-learn>=1.3.0
+
+# NLP & Embeddings
+transformers>=4.30.0
+sentencepiece>=0.1.99
+sentence-transformers>=2.2.0
+
+# Local LLM
+litellm>=1.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+typing-extensions>=4.5.0
+

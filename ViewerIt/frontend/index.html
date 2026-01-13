@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ViewerIt | eDiscovery Data Comparator</title>
+    
+    <!-- Cyberpunk Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+      /* Loading screen - hidden once React mounts */
+      #loading-screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #0a0a0f;
+        color: #00f5ff;
+        font-family: 'JetBrains Mono', monospace;
+        z-index: 99999;
+        transition: opacity 0.3s ease;
+      }
+      #loading-screen.hidden { opacity: 0; pointer-events: none; }
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 2px solid #1a1a2e;
+        border-top-color: #00f5ff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <!-- Loading screen - disappears once React mounts -->
+    <div id="loading-screen">
+      <div class="loading-spinner"></div>
+      <p style="margin-top: 16px; font-size: 12px;">Initializing ViewerIt...</p>
+    </div>
+    
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Hide loading screen once React renders
+      const observer = new MutationObserver(function(mutations) {
+        const root = document.getElementById('root');
+        if (root && root.children.length > 0) {
+          document.getElementById('loading-screen')?.classList.add('hidden');
+          setTimeout(() => document.getElementById('loading-screen')?.remove(), 300);
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.getElementById('root'), { childList: true });
+      
+      // Fallback error display
+      setTimeout(function() {
+        const loadingEl = document.getElementById('loading-screen');
+        if (loadingEl && !loadingEl.classList.contains('hidden')) {
+          loadingEl.innerHTML = '<p style="color:#ff3366;">Failed to load application. Check console (F12).</p>';
+        }
+      }, 10000);
+    </script>
+  </body>
+</html>

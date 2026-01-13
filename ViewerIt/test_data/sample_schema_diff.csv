@@ -1,0 +1,7 @@
+ID,full_name,total_amount,transaction_date,type,extra_column
+1,Alice Smith,100.50,2024-01-01,A,x
+2,Bob Jones,200.75,2024-01-02,B,y
+3,Charlie Brown,150.25,2024-01-03,A,z
+4,Diana Ross,300.00,2024-01-04,C,w
+5,Eve Wilson,175.50,2024-01-05,B,v
+

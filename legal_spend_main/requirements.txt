@@ -1,0 +1,12 @@
+google-adk
+pandas
+pyarrow
+pyodbc
+openpyxl
+streamlit
+python-dotenv
+litellm
+ollama
+numpy
+
+
