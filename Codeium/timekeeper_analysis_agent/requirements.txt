@@ -1,0 +1,27 @@
+# Timekeeper Analysis Agent - Python Dependencies
+
+# Core ADK and Google AI
+google-adk>=1.0.0
+google-genai
+google-auth
+
+# LLM Integration
+litellm
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+pyarrow  # For parquet file support
+openpyxl  # For Excel file support
+
+# Configuration
+pyyaml>=6.0
+python-dotenv
+
+# Web UI
+streamlit>=1.30.0
+
+# Utilities
+typing-extensions
+pydantic>=2.0.0

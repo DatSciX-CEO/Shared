@@ -1,0 +1,58 @@
+# Ollama Model Configuration for Timekeeper Analysis
+# Verify models support tools with: ollama show <model_name>
+
+# Recommended Models (with tool support)
+recommended_models:
+  - name: "mistral-small3.1"
+    parameters: "24.0B"
+    context_length: 131072
+    capabilities:
+      - "completion"
+      - "vision"
+      - "tools"
+    recommended_for:
+      - "director_agent"
+      - "analysis_coordinator"
+
+  - name: "llama3.2"
+    parameters: "3B"
+    context_length: 128000
+    capabilities:
+      - "completion"
+      - "tools"
+    recommended_for:
+      - "worker_agents"
+      - "sub_agents"
+
+# Model Customization (if needed)
+# To modify model templates:
+# 1. ollama show --modelfile <model_name> > modelfile.txt
+# 2. Edit modelfile.txt with custom instructions
+# 3. ollama create <custom_model_name> -f modelfile.txt
+
+custom_models:
+  timekeeper_analyst:
+    base_model: "mistral-small3.1"
+    # Custom template to prevent infinite tool loops
+    template_modifications: |
+      Review the user's prompt and available functions.
+      Determine if calling a function is appropriate.
+      If function call needed: respond with JSON {"name": "function_name", "parameters": {...}}
+      If function call NOT needed: respond in plain text.
+    status: "optional"  # set to "active" after creation
+
+# Model Performance Settings
+performance:
+  temperature: 0.1  # Lower for more deterministic analysis
+  top_p: 0.9
+  top_k: 40
+  repeat_penalty: 1.1
+  num_predict: 4096  # max tokens in response
+
+# Model Fallback Strategy
+fallback:
+  enabled: true
+  strategy: "cascade"  # cascade, parallel
+  order:
+    - "mistral-small3.1"
+    - "llama3.2"

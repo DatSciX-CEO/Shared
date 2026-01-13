@@ -1,0 +1,95 @@
+# Timekeeper Analysis Agent Configuration
+# Based on official Google ADK documentation and best practices
+
+# Ollama Local LLM Configuration
+ollama:
+  base_url: "http://localhost:11434"
+  # Use ollama_chat provider (NOT ollama) for proper tool support
+  provider: "ollama_chat"
+  # Recommended models with tool support: mistral-small3.1, llama3.2
+  default_model: "mistral-small3.1"
+  timeout: 120  # seconds
+  max_retries: 3
+
+# Agent Model Assignments
+agents:
+  # Director/Orchestrator uses more capable model
+  director_model: "mistral-small3.1"
+  # Worker agents can use same or lighter model
+  worker_model: "mistral-small3.1"
+  # Maximum iterations for analysis loops
+  max_analysis_iterations: 3
+
+# Data Processing Configuration
+data:
+  supported_formats:
+    - "csv"
+    - "xlsx"
+    - "xls"
+    - "parquet"
+  max_file_size_mb: 500
+  # Chunk size for large file processing
+  chunk_size_rows: 10000
+  # Expected timekeeper data columns
+  required_columns:
+    - "timekeeper_id"
+    - "date"
+    - "hours"
+    - "rate"
+  optional_columns:
+    - "matter_id"
+    - "task_code"
+    - "description"
+    - "client_id"
+
+# Analysis Parameters
+analysis:
+  # Productivity thresholds
+  productivity:
+    low_hours_threshold: 20  # hours per week
+    high_hours_threshold: 60  # hours per week
+    billable_target_percentage: 75
+
+  # Billing anomaly detection
+  billing:
+    rate_variance_threshold: 0.3  # 30% deviation
+    hours_spike_threshold: 2.0  # 2x average
+    pattern_lookback_days: 90
+
+  # Resource optimization
+  resource:
+    utilization_target: 80  # percentage
+    bench_time_threshold: 10  # hours per week
+    skill_match_weight: 0.7
+
+# Report Generation
+reporting:
+  formats:
+    - "markdown"
+    - "pdf"
+    - "json"
+  include_visualizations: true
+  summary_length: "detailed"  # brief, detailed, comprehensive
+
+# UI Configuration
+ui:
+  streamlit:
+    port: 8501
+    theme: "light"
+    max_upload_size_mb: 500
+
+  adk_web:
+    port: 8080
+    enable_auth: false
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/timekeeper_agent.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Session Management
+session:
+  backend: "in_memory"  # in_memory, redis, firestore
+  timeout_minutes: 60
+  max_sessions_per_user: 5
